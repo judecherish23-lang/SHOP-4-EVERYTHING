@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 
 interface Product {
   id: number;
@@ -10,6 +10,7 @@ interface Product {
   image: string;
   tag: string;
   description: string;
+  addedBy?: string;
 }
 
 interface CartItem {
@@ -17,7 +18,15 @@ interface CartItem {
   quantity: number;
 }
 
+interface User {
+  email: string;
+  role: 'admin' | 'seller' | 'buyer';
+  isEligibleToUpload: boolean;
+}
+
 export default function Home() {
+  const adminEmails = ['darlingjude9@gmail.com', 'judecherish233@gmail.com'];
+
   const [products, setProducts] = useState<Product[]>([
     {
       id: 1,
@@ -72,24 +81,6 @@ export default function Home() {
       image: "https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=600&auto=format&fit=crop&q=80",
       tag: "🍳 Kitchen Utility",
       description: "Heavy-duty electric smoothie blender with stainless steel blades."
-    },
-    {
-      id: 7,
-      title: "Silicone Air Fryer Non-Stick Liner Set",
-      category: "Kitchen & Appliances",
-      price: 4500,
-      image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&auto=format&fit=crop&q=80",
-      tag: "🔥 Popular",
-      description: "Reusable heat-resistant silicone air fryer baking liners."
-    },
-    {
-      id: 8,
-      title: "High-Capacity Fast Charge Power Bank",
-      category: "Electronics & Gadgets",
-      price: 16500,
-      image: "https://images.unsplash.com/photo-1609592424109-dd9892f1b177?w=600&auto=format&fit=crop&q=80",
-      tag: "⚡ Fast Charge",
-      description: "20,000mAh dual USB fast charging portable power bank."
     }
   ]);
 
@@ -98,35 +89,78 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
-  // Author & Founder State (Updated to Darlingtina Jude & photo)
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  // Eligible Sellers List
+  const [registeredUsers, setRegisteredUsers] = useState<User[]>([
+    { email: 'darlingjude9@gmail.com', role: 'admin', isEligibleToUpload: true },
+    { email: 'judecherish233@gmail.com', role: 'admin', isEligibleToUpload: true },
+    { email: 'seller@shop4everything.com', role: 'seller', isEligibleToUpload: false }
+  ]);
+
+  // Modals for Upload / Edit / Admin
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isUserMgmtOpen, setIsUserMgmtOpen] = useState(false);
+
+  // Founder Info
   const [authorName, setAuthorName] = useState('Darlingtina Jude');
   const [authorBio, setAuthorBio] = useState('Welcome to SHOP4EVERYTHING! We bring you top-tier fashion wares, luxury shoes, handcrafted bags, household items, garden decor, and appliances delivered right to your doorstep.');
   const [authorImage, setAuthorImage] = useState('/darlingtina.jpg');
 
-  // New Product Form State for Admin
+  // New Item Form State (File Upload)
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('Fashion & Clothings');
   const [newPrice, setNewPrice] = useState('');
-  const [newImage, setNewImage] = useState('');
   const [newTag, setNewTag] = useState('🟢 In Stock');
   const [newDesc, setNewDesc] = useState('');
+  const [newImageFile, setNewImageFile] = useState<string>('');
 
-  // Load Cart & Theme from localStorage
+  // Edit Item Form State
+  const [editTitle, setEditTitle] = useState('');
+  const [editCategory, setEditCategory] = useState('Fashion & Clothings');
+  const [editPrice, setEditPrice] = useState('');
+  const [editTag, setEditTag] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editImageFile, setEditImageFile] = useState<string>('');
+
+  // Load from localStorage on mount
   useEffect(() => {
+    const savedProducts = localStorage.getItem('shop4everything_products');
+    if (savedProducts) {
+      try { setProducts(JSON.parse(savedProducts)); } catch (e) {}
+    }
     const savedCart = localStorage.getItem('shop4everything_cart');
     if (savedCart) {
       try { setCart(JSON.parse(savedCart)); } catch (e) {}
     }
-    const savedTheme = localStorage.getItem('shop4everything_theme');
-    setIsDark(savedTheme !== 'light');
+    const savedUser = localStorage.getItem('shop4everything_user');
+    if (savedUser) {
+      try { setCurrentUser(JSON.parse(savedUser)); } catch (e) {}
+    }
+    const savedUsers = localStorage.getItem('shop4everything_users');
+    if (savedUsers) {
+      try { setRegisteredUsers(JSON.parse(savedUsers)); } catch (e) {}
+    }
   }, []);
 
-  // Sync Cart to localStorage
+  // Save to localStorage
+  useEffect(() => {
+    localStorage.setItem('shop4everything_products', JSON.stringify(products));
+  }, [products]);
+
   useEffect(() => {
     localStorage.setItem('shop4everything_cart', JSON.stringify(cart));
   }, [cart]);
+
+  useEffect(() => {
+    localStorage.setItem('shop4everything_users', JSON.stringify(registeredUsers));
+  }, [registeredUsers]);
 
   const categories = [
     'All',
@@ -138,13 +172,146 @@ export default function Home() {
     'Electronics & Gadgets'
   ];
 
+  // Helper for converting uploaded file to Data URL
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>, setTargetImage: (val: string) => void) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTargetImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Login Handler
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail) return;
+
+    const emailClean = loginEmail.trim().toLowerCase();
+    const isAdmin = adminEmails.includes(emailClean);
+
+    const existingUser = registeredUsers.find(u => u.email.toLowerCase() === emailClean);
+    const userRole = isAdmin ? 'admin' : (existingUser ? existingUser.role : 'buyer');
+    const eligible = isAdmin ? true : (existingUser ? existingUser.isEligibleToUpload : false);
+
+    const loggedUser: User = {
+      email: emailClean,
+      role: userRole,
+      isEligibleToUpload: eligible
+    };
+
+    setCurrentUser(loggedUser);
+    localStorage.setItem('shop4everything_user', JSON.stringify(loggedUser));
+
+    if (!existingUser) {
+      setRegisteredUsers(prev => [...prev, loggedUser]);
+    }
+
+    setIsLoginOpen(false);
+    setLoginEmail('');
+    setLoginPassword('');
+    alert(`Welcome back, ${emailClean}! ${isAdmin ? '👑 You have full Admin control.' : ''}`);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('shop4everything_user');
+    alert('Logged out successfully.');
+  };
+
+  // Eligibility Manager (Admin action)
+  const toggleUserEligibility = (email: string) => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    setRegisteredUsers(prev =>
+      prev.map(u => {
+        if (u.email === email) {
+          const updated = !u.isEligibleToUpload;
+          return { ...u, isEligibleToUpload: updated, role: updated ? 'seller' : 'buyer' };
+        }
+        return u;
+      })
+    );
+  };
+
+  // Add Item Handler (Local File Upload)
+  const handleAddNewProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle || !newPrice) {
+      alert('Please enter title and price!');
+      return;
+    }
+
+    const item: Product = {
+      id: Date.now(),
+      title: newTitle,
+      category: newCategory,
+      price: parseFloat(newPrice),
+      image: newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
+      tag: newTag,
+      description: newDesc || 'High quality item.',
+      addedBy: currentUser?.email
+    };
+
+    setProducts(prev => [item, ...prev]);
+    setNewTitle('');
+    setNewPrice('');
+    setNewImageFile('');
+    setNewDesc('');
+    setIsUploadOpen(false);
+    alert('✅ New item uploaded successfully!');
+  };
+
+  // Edit Item Handler
+  const startEditingProduct = (product: Product) => {
+    setEditingProduct(product);
+    setEditTitle(product.title);
+    setEditCategory(product.category);
+    setEditPrice(product.price.toString());
+    setEditTag(product.tag);
+    setEditDesc(product.description);
+    setEditImageFile(product.image);
+  };
+
+  const handleSaveEditProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    setProducts(prev =>
+      prev.map(p => {
+        if (p.id === editingProduct.id) {
+          return {
+            ...p,
+            title: editTitle,
+            category: editCategory,
+            price: parseFloat(editPrice),
+            tag: editTag,
+            description: editDesc,
+            image: editImageFile || p.image
+          };
+        }
+        return p;
+      })
+    );
+
+    setEditingProduct(null);
+    alert('✨ Item updated successfully!');
+  };
+
+  const handleDeleteProduct = (productId: number) => {
+    if (confirm('Are you sure you want to delete this item?')) {
+      setProducts(prev => prev.filter(p => p.id !== productId));
+      setCart(prev => prev.filter(i => i.product.id !== productId));
+    }
+  };
+
+  // Cart Functions
   const addToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
-        return prev.map(item =>
-          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
+        return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
       return [...prev, { product, quantity: 1 }];
     });
@@ -153,15 +320,13 @@ export default function Home() {
 
   const updateQuantity = (productId: number, delta: number) => {
     setCart(prev =>
-      prev
-        .map(item => {
-          if (item.product.id === productId) {
-            const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean) as CartItem[]
+      prev.map(item => {
+        if (item.product.id === productId) {
+          const newQty = item.quantity + delta;
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter(Boolean) as CartItem[]
     );
   };
 
@@ -169,48 +334,17 @@ export default function Home() {
     setCart(prev => prev.filter(item => item.product.id !== productId));
   };
 
-  // Automatic Total Price Calculator
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartSubtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
-  // Generate Formatted WhatsApp Order Message
   const generateWhatsAppLink = (phoneNumber: string) => {
     if (cart.length === 0) return '#';
-    let text = `🛍️ *NEW ORDER FROM SHOP4EVERYTHING*\n`;
-    text += `------------------------------------\n`;
+    let text = `🛍️ *NEW ORDER FROM SHOP4EVERYTHING*\n------------------------------------\n`;
     cart.forEach((item, index) => {
-      text += `${index + 1}. *${item.product.title}*\n`;
-      text += `   • Qty: ${item.quantity}\n`;
-      text += `   • Price: ₦${(item.product.price * item.quantity).toLocaleString()}\n`;
+      text += `${index + 1}. *${item.product.title}*\n   • Qty: ${item.quantity}\n   • Price: ₦${(item.product.price * item.quantity).toLocaleString()}\n`;
     });
-    text += `------------------------------------\n`;
-    text += `💰 *TOTAL AMOUNT: ₦${cartSubtotal.toLocaleString()}*\n\n`;
-    text += `Please confirm my order availability and delivery details!`;
-
+    text += `------------------------------------\n💰 *TOTAL AMOUNT: ₦${cartSubtotal.toLocaleString()}*\n\nPlease confirm availability and delivery!`;
     return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(text)}`;
-  };
-
-  const handleAddNewProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle || !newPrice) {
-      alert('Please provide product title and price!');
-      return;
-    }
-    const item: Product = {
-      id: Date.now(),
-      title: newTitle,
-      category: newCategory,
-      price: parseFloat(newPrice),
-      image: newImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
-      tag: newTag,
-      description: newDesc || 'High quality item.'
-    };
-    setProducts(prev => [item, ...prev]);
-    setNewTitle('');
-    setNewPrice('');
-    setNewImage('');
-    setNewDesc('');
-    alert('✅ Product added successfully!');
   };
 
   const filteredProducts = products.filter(p => {
@@ -219,6 +353,9 @@ export default function Home() {
                           p.category.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  const canUserUpload = currentUser?.role === 'admin' || currentUser?.isEligibleToUpload;
+  const isUserAdmin = currentUser?.role === 'admin';
 
   const primaryPhone = '2349042797233';
   const backupPhone = '2348066295944';
@@ -251,13 +388,13 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Search Input */}
-          <div style={{ flex: 1, maxWidth: '320px', minWidth: '200px' }}>
+          {/* Search Bar */}
+          <div style={{ flex: 1, maxWidth: '300px', minWidth: '180px' }}>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search fashion, decor, appliances..."
+              placeholder="🔍 Search products..."
               style={{
                 width: '100%',
                 padding: '8px 16px',
@@ -271,25 +408,77 @@ export default function Home() {
             />
           </div>
 
-          {/* Header Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button
-              onClick={() => setIsAdminOpen(true)}
-              style={{
-                background: 'rgba(0, 242, 254, 0.12)',
-                color: '#00f2fe',
-                border: '1px solid #00f2fe',
-                padding: '6px 14px',
-                borderRadius: '30px',
-                fontWeight: '800',
-                fontSize: '0.78rem',
-                cursor: 'pointer',
-              }}
-            >
-              ⚙️ Admin Portal
-            </button>
+          {/* Actions & Login */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            
+            {/* Upload Button for Admin/Eligible Users */}
+            {canUserUpload && (
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #00f2fe, #00ff9d)',
+                  color: '#000',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '30px',
+                  fontWeight: '900',
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(0,242,254,0.3)',
+                }}
+              >
+                ➕ Upload Item
+              </button>
+            )}
 
-            {/* Shopping Cart Button */}
+            {/* Admin User Management Button */}
+            {isUserAdmin && (
+              <button
+                onClick={() => setIsUserMgmtOpen(true)}
+                style={{
+                  background: 'rgba(255, 51, 106, 0.15)',
+                  color: '#ff3366',
+                  border: '1px solid #ff3366',
+                  padding: '8px 14px',
+                  borderRadius: '30px',
+                  fontWeight: '800',
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                }}
+              >
+                👑 User Eligibility
+              </button>
+            )}
+
+            {/* User Profile / Login Button */}
+            {currentUser ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', padding: '4px 12px', borderRadius: '30px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: isUserAdmin ? '#ff3366' : '#00f2fe' }}>
+                  {isUserAdmin ? '👑 Admin:' : '👤'} {currentUser.email.split('@')[0]}
+                </span>
+                <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.72rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsLoginOpen(true)}
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  color: isDark ? '#fff' : '#000',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`,
+                  padding: '8px 16px',
+                  borderRadius: '30px',
+                  fontWeight: '800',
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🔐 Login / Sign In
+              </button>
+            )}
+
+            {/* Cart Button */}
             <button
               onClick={() => setIsCartOpen(true)}
               style={{
@@ -312,6 +501,7 @@ export default function Home() {
                 {totalCartCount}
               </span>
             </button>
+
           </div>
 
         </div>
@@ -321,13 +511,13 @@ export default function Home() {
       <section style={{ maxWidth: '1200px', margin: '20px auto 10px auto', padding: '0 20px', textAlign: 'center' }}>
         <div className="glass-card" style={{ padding: '36px 20px', background: isDark ? 'radial-gradient(ellipse at top, rgba(255,51,106,0.15), rgba(9,13,22,0.6))' : 'radial-gradient(ellipse at top, rgba(0,242,254,0.15), #ffffff)' }}>
           <span style={{ background: 'rgba(255,51,106,0.2)', color: '#ff3366', padding: '4px 14px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            ✨ SHOP4EVERYTHING VARIETIES
+            ✨ SHOP4EVERYTHING STORE
           </span>
           <h2 style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)', fontWeight: '900', margin: '12px 0 10px 0', lineHeight: '1.2' }}>
-            Everything You Need, All in One Place
+            Everything You Need, Delivered to Your Door
           </h2>
           <p style={{ maxWidth: '640px', margin: '0 auto 20px auto', fontSize: '0.95rem', color: isDark ? '#94a3b8' : '#64748b', lineHeight: '1.6' }}>
-            Explore fashion, beauty, garden decor, household appliances, and gadgets. Pick your items and order via WhatsApp instantly!
+            Fashion, shoes, bags, perfumes, garden decor & home appliances. Pick your list and order on WhatsApp!
           </p>
         </div>
       </section>
@@ -357,7 +547,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== PRODUCTS SHOWCASE GRID ===== */}
+      {/* ===== PRODUCTS SHOWCASE GRID (WITH EDIT FOR ADMINS) ===== */}
       <main style={{ maxWidth: '1200px', margin: '20px auto 40px auto', padding: '0 20px' }}>
         <div className="responsive-grid">
           {filteredProducts.map(product => {
@@ -365,12 +555,31 @@ export default function Home() {
             const inCartQty = cartItem ? cartItem.quantity : 0;
 
             return (
-              <div key={product.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div key={product.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+                
+                {/* Admin / Eligible User Edit & Delete Controls */}
+                {isUserAdmin && (
+                  <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 10, display: 'flex', gap: '6px' }}>
+                    <button
+                      onClick={() => startEditingProduct(product)}
+                      style={{ background: 'rgba(0, 242, 254, 0.9)', color: '#000', border: 'none', padding: '4px 10px', borderRadius: '12px', fontWeight: '900', fontSize: '0.72rem', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(product.id)}
+                      style={{ background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '12px', fontWeight: '900', fontSize: '0.72rem', cursor: 'pointer' }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                )}
+
                 <div style={{ position: 'relative', height: '220px', width: '100%', overflow: 'hidden', background: '#000' }}>
                   <img
                     src={product.image}
                     alt={product.title}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                   <span style={{
                     position: 'absolute',
@@ -430,11 +639,9 @@ export default function Home() {
         </div>
       </main>
 
-      {/* ===== ABOUT THE FOUNDER SECTION (DARLINGTINA & IMAGE) ===== */}
+      {/* ===== FOUNDER SECTION (DARLINGTINA JUDE & PHOTO) ===== */}
       <section style={{ maxWidth: '1200px', margin: '40px auto', padding: '0 20px' }}>
         <div className="glass-card" style={{ padding: '30px', display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
-          
-          {/* Founder Image Space */}
           <div style={{ position: 'relative', width: '140px', height: '140px', borderRadius: '50%', overflow: 'hidden', border: '3px solid #ff3366', boxShadow: '0 8px 30px rgba(255,51,106,0.3)', flexShrink: 0 }}>
             <img src={authorImage} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
@@ -449,53 +656,236 @@ export default function Home() {
             </p>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <a
-                href={`https://wa.me/${primaryPhone}`}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  background: '#25d366',
-                  color: '#fff',
-                  padding: '8px 16px',
-                  borderRadius: '20px',
-                  textDecoration: 'none',
-                  fontSize: '0.8rem',
-                  fontWeight: '800',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
+              <a href={`https://wa.me/${primaryPhone}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '8px 16px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800' }}>
                 💬 Main Line: 09042797233
               </a>
-
-              <a
-                href={`https://wa.me/${backupPhone}`}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  background: 'rgba(255,255,255,0.08)',
-                  color: isDark ? '#fff' : '#000',
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`,
-                  padding: '8px 16px',
-                  borderRadius: '20px',
-                  textDecoration: 'none',
-                  fontSize: '0.8rem',
-                  fontWeight: '800',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
+              <a href={`https://wa.me/${backupPhone}`} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 16px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800' }}>
                 📞 Backup Line: 08066295944
               </a>
             </div>
           </div>
-
         </div>
       </section>
 
-      {/* ===== SHOPPING CART DRAWER & AUTOMATIC CALCULATOR ===== */}
+      {/* ===== LOGIN MODAL ===== */}
+      {isLoginOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card" style={{ maxWidth: '400px', width: '100%', padding: '28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#00f2fe' }}>🔐 Sign In / Admin Login</h3>
+              <button onClick={() => setIsLoginOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '16px' }}>
+              Log in with your email. Admin emails (<code>darlingjude9@gmail.com</code> & <code>judecherish233@gmail.com</code>) get full upload, edit & user eligibility controls.
+            </p>
+
+            <form onSubmit={handleLogin}>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Email Address</label>
+                <input
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="e.g. darlingjude9@gmail.com"
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Password</label>
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer' }}>
+                🚀 Log In to SHOP4EVERYTHING
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== UPLOAD ITEM MODAL (WITH LOCAL FILE UPLOAD) ===== */}
+      {isUploadOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#00f2fe' }}>➕ Upload New Item</h3>
+              <button onClick={() => setIsUploadOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <form onSubmit={handleAddNewProduct}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Product Title</label>
+                <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title" required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Category</label>
+                  <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}>
+                    {categories.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Price (₦)</label>
+                  <input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="25000" required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+                </div>
+              </div>
+
+              {/* LOCAL FILE UPLOAD (NOT URL) */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>📷 Upload Product Photo (Select File)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, setNewImageFile)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #00f2fe', color: '#fff' }}
+                />
+                {newImageFile && (
+                  <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                    <img src={newImageFile} alt="Preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '12px', border: '2px solid #00f2fe' }} />
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Stock Tag</label>
+                <input type="text" value={newTag} onChange={(e) => setNewTag(e.target.value)} placeholder="🟢 In Stock" style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Description</label>
+                <textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Product description..." rows={2} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', border: 'none', borderRadius: '30px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer' }}>
+                🚀 Publish Product →
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== EDIT ITEM MODAL (ADMIN / ELIGIBLE USER) ===== */}
+      {editingProduct && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#ff3366' }}>✏️ Edit Product</h3>
+              <button onClick={() => setEditingProduct(null)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <form onSubmit={handleSaveEditProduct}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Product Title</label>
+                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Category</label>
+                  <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}>
+                    {categories.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Price (₦)</label>
+                  <input type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+                </div>
+              </div>
+
+              {/* CHANGE PHOTO VIA FILE UPLOAD */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>📷 Change Product Photo (Upload File)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, setEditImageFile)}
+                  style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #ff3366', color: '#fff' }}
+                />
+                {editImageFile && (
+                  <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                    <img src={editImageFile} alt="Preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '12px', border: '2px solid #ff3366' }} />
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Stock Tag</label>
+                <input type="text" value={editTag} onChange={(e) => setEditTag(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Description</label>
+                <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer' }}>
+                💾 Save Changes →
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ADMIN USER ELIGIBILITY MANAGEMENT MODAL ===== */}
+      {isUserMgmtOpen && isUserAdmin && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card" style={{ maxWidth: '520px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#ff3366' }}>👑 Admin User Eligibility Control</h3>
+              <button onClick={() => setIsUserMgmtOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '16px' }}>
+              As an Admin (<code>darlingjude9@gmail.com</code> / <code>judecherish233@gmail.com</code>), you can grant or revoke item upload privileges for any user:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {registeredUsers.map((u, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{u.email}</div>
+                    <span style={{ fontSize: '0.72rem', color: u.role === 'admin' ? '#ff3366' : u.isEligibleToUpload ? '#00f2fe' : '#94a3b8', fontWeight: 'bold' }}>
+                      {u.role === 'admin' ? '👑 Main Admin' : u.isEligibleToUpload ? '✅ Eligible Uploader' : '❌ Buyer Only'}
+                    </span>
+                  </div>
+
+                  {u.role !== 'admin' && (
+                    <button
+                      onClick={() => toggleUserEligibility(u.email)}
+                      style={{
+                        background: u.isEligibleToUpload ? '#ef4444' : '#25d366',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        fontWeight: '800',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {u.isEligibleToUpload ? 'Revoke Permission' : 'Grant Upload Privilege'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CART DRAWER & AUTOMATIC CALCULATOR ===== */}
       {isCartOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
           <div style={{
@@ -508,7 +898,6 @@ export default function Home() {
             boxShadow: '-10px 0 40px rgba(0,0,0,0.5)',
             borderLeft: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
           }}>
-            
             <div style={{ padding: '20px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.4rem' }}>🛒</span>
@@ -529,18 +918,14 @@ export default function Home() {
                     <div style={{ flex: 1 }}>
                       <h4 style={{ margin: '0 0 4px 0', fontSize: '0.88rem', fontWeight: '800' }}>{item.product.title}</h4>
                       <div style={{ fontSize: '0.85rem', color: '#ff3366', fontWeight: '900' }}>₦{item.product.price.toLocaleString()}</div>
-                      
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                         <button onClick={() => updateQuantity(item.product.id, -1)} style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', color: isDark ? '#fff' : '#000', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
                         <span style={{ fontSize: '0.82rem', fontWeight: '800' }}>{item.quantity}</span>
                         <button onClick={() => updateQuantity(item.product.id, 1)} style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', color: isDark ? '#fff' : '#000', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
                       </div>
                     </div>
-
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.9rem', fontWeight: '900' }}>
-                        ₦{(item.product.price * item.quantity).toLocaleString()}
-                      </div>
+                      <div style={{ fontSize: '0.9rem', fontWeight: '900' }}>₦{(item.product.price * item.quantity).toLocaleString()}</div>
                       <button onClick={() => removeFromCart(item.product.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem', marginTop: '8px', fontWeight: 'bold' }}>Delete</button>
                     </div>
                   </div>
@@ -559,89 +944,14 @@ export default function Home() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <a
-                  href={generateWhatsAppLink(primaryPhone)}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    background: '#25d366',
-                    color: '#fff',
-                    padding: '14px',
-                    borderRadius: '30px',
-                    textDecoration: 'none',
-                    textAlign: 'center',
-                    fontWeight: '900',
-                    fontSize: '0.92rem',
-                    boxShadow: '0 4px 20px rgba(37,211,102,0.4)',
-                    pointerEvents: cart.length === 0 ? 'none' : 'auto',
-                    opacity: cart.length === 0 ? 0.5 : 1,
-                  }}
-                >
+                <a href={generateWhatsAppLink(primaryPhone)} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '14px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '900', fontSize: '0.92rem', boxShadow: '0 4px 20px rgba(37,211,102,0.4)', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>
                   💬 Checkout via Main WhatsApp (09042797233) →
                 </a>
-
-                <a
-                  href={generateWhatsAppLink(backupPhone)}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    color: isDark ? '#fff' : '#000',
-                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`,
-                    padding: '10px',
-                    borderRadius: '30px',
-                    textDecoration: 'none',
-                    textAlign: 'center',
-                    fontWeight: '800',
-                    fontSize: '0.8rem',
-                    pointerEvents: cart.length === 0 ? 'none' : 'auto',
-                    opacity: cart.length === 0 ? 0.5 : 1,
-                  }}
-                >
+                <a href={generateWhatsAppLink(backupPhone)} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.06)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '10px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.8rem', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>
                   📞 Backup Line (08066295944) →
                 </a>
               </div>
             </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* ===== ADMIN PORTAL MODAL ===== */}
-      {isAdminOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)' }}>
-          <div className="glass-card" style={{ maxWidth: '540px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '900', color: '#00f2fe' }}>⚙️ Admin Store Portal</h3>
-              <button onClick={() => setIsAdminOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
-            </div>
-
-            <div style={{ marginBottom: '24px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
-              <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', fontWeight: '800', color: '#ff3366' }}>👑 Store Founder Profile</h4>
-              <input type="text" value={authorName} onChange={(e) => setAuthorName(e.target.value)} placeholder="Founder Name" style={{ width: '100%', padding: '8px', marginBottom: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-              <input type="text" value={authorImage} onChange={(e) => setAuthorImage(e.target.value)} placeholder="Founder Image Path" style={{ width: '100%', padding: '8px', marginBottom: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-              <textarea value={authorBio} onChange={(e) => setAuthorBio(e.target.value)} placeholder="Founder Bio" rows={2} style={{ width: '100%', padding: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-            </div>
-
-            <form onSubmit={handleAddNewProduct}>
-              <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', fontWeight: '800', color: '#00f2fe' }}>➕ Add New Item to SHOP4EVERYTHING</h4>
-              <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Product Title" required style={{ width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-              
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}>
-                  {categories.filter(c => c !== 'All').map(c => <option key={c} value={c} style={{ background: '#000' }}>{c}</option>)}
-                </select>
-                <input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="Price (₦)" required style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-              </div>
-
-              <input type="text" value={newImage} onChange={(e) => setNewImage(e.target.value)} placeholder="Image URL" style={{ width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-              <input type="text" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description" style={{ width: '100%', padding: '10px', marginBottom: '16px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
-
-              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', border: 'none', borderRadius: '30px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer' }}>
-                🚀 Publish Product to Store →
-              </button>
-            </form>
 
           </div>
         </div>
