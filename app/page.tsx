@@ -677,7 +677,7 @@ export default function Home() {
             </div>
 
             <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '16px' }}>
-              Log in with your email. Admin emails (<code>darlingjude9@gmail.com</code> & <code>judecherish233@gmail.com</code>) get full upload, edit & user eligibility controls.
+              Log in with your email to continue.
             </p>
 
             <form onSubmit={handleLogin}>
