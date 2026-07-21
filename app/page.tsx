@@ -318,16 +318,29 @@ export default function Home() {
 
   const handleInstallClick = async () => {
     if (!deferredInstallPrompt) {
-      setShowInstallCard(false);
+      alert("To install this app, tap your browser's menu (three dots in the top right) and select 'Install app' or 'Add to Home screen'.");
       return;
     }
 
     try {
+      // Show the native browser install prompt
       await deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice;
+      
+      // Wait for the user to respond to the prompt
+      const choiceResult = await deferredInstallPrompt.userChoice;
+      
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+        setIsInstalled(true);
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      
+      // Clear the deferred prompt so it can only be used once
+      setDeferredInstallPrompt(null);
       setShowInstallCard(false);
     } catch (error) {
-      console.log('Install prompt cancelled', error);
+      console.log('Install prompt error', error);
     }
   };
 
