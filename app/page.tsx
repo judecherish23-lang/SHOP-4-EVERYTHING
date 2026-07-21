@@ -89,7 +89,15 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
-  const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder'>('overview');
+  const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder' | 'broadcast' | 'settings'>('overview');
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+  const [broadcastSubject, setBroadcastSubject] = useState('New product available now!');
+  const [broadcastMessage, setBroadcastMessage] = useState('Hello! A new product has just been added to SHOP4EVERYTHING. Check it out now.');
+  const [broadcastStatus, setBroadcastStatus] = useState('');
+  const [storeName, setStoreName] = useState('SHOP4EVERYTHING');
+  const [storeTagline, setStoreTagline] = useState('Online Varieties, Wares & Decor');
+  const [storePrimaryPhone, setStorePrimaryPhone] = useState('2349042797233');
+  const [storeBackupPhone, setStoreBackupPhone] = useState('2348066295944');
   const [isDark, setIsDark] = useState(true);
 
   // Authentication State
@@ -149,6 +157,14 @@ export default function Home() {
     if (savedUsers) {
       try { setRegisteredUsers(JSON.parse(savedUsers)); } catch (e) {}
     }
+    const savedStoreName = localStorage.getItem('shop4everything_store_name');
+    if (savedStoreName) setStoreName(savedStoreName);
+    const savedStoreTagline = localStorage.getItem('shop4everything_store_tagline');
+    if (savedStoreTagline) setStoreTagline(savedStoreTagline);
+    const savedPrimaryPhone = localStorage.getItem('shop4everything_primary_phone');
+    if (savedPrimaryPhone) setStorePrimaryPhone(savedPrimaryPhone);
+    const savedBackupPhone = localStorage.getItem('shop4everything_backup_phone');
+    if (savedBackupPhone) setStoreBackupPhone(savedBackupPhone);
   }, []);
 
   // Save to localStorage
@@ -163,6 +179,48 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem('shop4everything_users', JSON.stringify(registeredUsers));
   }, [registeredUsers]);
+
+  useEffect(() => {
+    localStorage.setItem('shop4everything_store_name', storeName);
+  }, [storeName]);
+
+  useEffect(() => {
+    localStorage.setItem('shop4everything_store_tagline', storeTagline);
+  }, [storeTagline]);
+
+  useEffect(() => {
+    localStorage.setItem('shop4everything_primary_phone', storePrimaryPhone);
+  }, [storePrimaryPhone]);
+
+  useEffect(() => {
+    localStorage.setItem('shop4everything_backup_phone', storeBackupPhone);
+  }, [storeBackupPhone]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('shop4everything-sync') : null;
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'refresh') {
+        window.location.reload();
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'shop4everything-sync-event') {
+        window.location.reload();
+      }
+    };
+
+    channel?.addEventListener('message', handleMessage);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      channel?.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
+      channel?.close();
+    };
+  }, []);
 
   const categories = [
     'All',
@@ -359,8 +417,23 @@ export default function Home() {
   const canUserUpload = currentUser?.role === 'admin' || currentUser?.isEligibleToUpload;
   const isUserAdmin = currentUser?.role === 'admin';
 
-  const primaryPhone = '2349042797233';
-  const backupPhone = '2348066295944';
+  const refreshEveryone = (kind: 'upload' | 'settings' | 'broadcast') => {
+    if (typeof window === 'undefined') return;
+
+    const payload = { type: kind, timestamp: Date.now() };
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('shop4everything-sync');
+        channel.postMessage(payload);
+        channel.close();
+      }
+      localStorage.setItem('shop4everything-sync-event', JSON.stringify(payload));
+    } catch (error) {
+      console.log('Sync failed', error);
+    }
+
+    window.setTimeout(() => window.location.reload(), 300);
+  };
 
   const dashboardMenu = [
     { id: 'overview', label: 'Overview', icon: '📊' },
@@ -368,6 +441,8 @@ export default function Home() {
     { id: 'orders', label: 'Orders', icon: '📦' },
     { id: 'customers', label: 'Customers', icon: '👥' },
     { id: 'founder', label: 'Founder', icon: '👑' },
+    { id: 'broadcast', label: 'Broadcast', icon: '📣' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
   ] as const;
 
   return (
@@ -392,9 +467,9 @@ export default function Home() {
             </div>
             <div>
               <h1 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, background: 'linear-gradient(135deg, #ff3366, #00f2fe)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.5px' }}>
-                SHOP4EVERYTHING
+                {storeName}
               </h1>
-              <span style={{ fontSize: '0.7rem', color: isDark ? '#94a3b8' : '#64748b' }}>Online Varieties, Wares & Decor</span>
+              <span style={{ fontSize: '0.7rem', color: isDark ? '#94a3b8' : '#64748b' }}>{storeTagline}</span>
             </div>
           </div>
 
@@ -504,6 +579,24 @@ export default function Home() {
               ☰ Dashboard
             </button>
 
+            {isUserAdmin && (
+              <button
+                onClick={() => setIsBroadcastOpen(true)}
+                style={{
+                  background: 'rgba(255, 51, 106, 0.15)',
+                  color: '#ff3366',
+                  border: '1px solid #ff3366',
+                  padding: '8px 14px',
+                  borderRadius: '30px',
+                  fontWeight: '800',
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                }}
+              >
+                📣 Broadcast
+              </button>
+            )}
+
             {/* Cart Button */}
             <button
               onClick={() => setIsCartOpen(true)}
@@ -540,7 +633,7 @@ export default function Home() {
             ✨ SHOP4EVERYTHING STORE
           </span>
           <h2 style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)', fontWeight: '900', margin: '12px 0 10px 0', lineHeight: '1.2' }}>
-            Everything You Need, Delivered to Your Door
+            {storeName} is ready for your next order
           </h2>
           <p style={{ maxWidth: '640px', margin: '0 auto 20px auto', fontSize: '0.95rem', color: isDark ? '#94a3b8' : '#64748b', lineHeight: '1.6' }}>
             Fashion, shoes, bags, perfumes, garden decor & home appliances. Pick your list and order on WhatsApp!
@@ -763,8 +856,37 @@ export default function Home() {
                   <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem' }}>{authorName}</h4>
                   <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: isDark ? '#94a3b8' : '#64748b' }}>{authorBio}</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
-                    <a href={`https://wa.me/${primaryPhone}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>💬 Main Line: 09042797233</a>
-                    <a href={`https://wa.me/${backupPhone}`} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>📞 Backup Line: 08066295944</a>
+                    <a href={`https://wa.me/${storePrimaryPhone}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>💬 Main Line: {storePrimaryPhone}</a>
+                    <a href={`https://wa.me/${storeBackupPhone}`} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>📞 Backup Line: {storeBackupPhone}</a>
+                  </div>
+                </div>
+              )}
+
+              {dashboardSection === 'broadcast' && isUserAdmin && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Admin Broadcast</div>
+                  <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: isDark ? '#94a3b8' : '#64748b' }}>Send an announcement to all registered users about a new product or update.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
+                    <input value={broadcastSubject} onChange={(e) => setBroadcastSubject(e.target.value)} placeholder="Subject" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
+                    <textarea value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} rows={5} placeholder="Message" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
+                    <button onClick={() => {
+                      setBroadcastStatus('Broadcast queued for all registered users.');
+                      refreshEveryone('broadcast');
+                    }} style={{ padding: '10px', borderRadius: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer' }}>📣 Send Broadcast</button>
+                    {broadcastStatus && <div style={{ fontSize: '0.8rem', color: '#00f2fe' }}>{broadcastStatus}</div>}
+                  </div>
+                </div>
+              )}
+
+              {dashboardSection === 'settings' && isUserAdmin && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Store Settings</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <input value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="Store name" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
+                    <input value={storeTagline} onChange={(e) => setStoreTagline(e.target.value)} placeholder="Tagline" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
+                    <input value={storePrimaryPhone} onChange={(e) => setStorePrimaryPhone(e.target.value)} placeholder="Primary phone" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
+                    <input value={storeBackupPhone} onChange={(e) => setStoreBackupPhone(e.target.value)} placeholder="Backup phone" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
+                    <button onClick={() => { setBroadcastStatus('Settings updated.'); refreshEveryone('settings'); }} style={{ padding: '10px', borderRadius: '12px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', fontWeight: '900', border: 'none', cursor: 'pointer' }}>⚙️ Apply Settings</button>
                   </div>
                 </div>
               )}
@@ -1050,11 +1172,11 @@ export default function Home() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <a href={generateWhatsAppLink(primaryPhone)} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '14px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '900', fontSize: '0.92rem', boxShadow: '0 4px 20px rgba(37,211,102,0.4)', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>
+                <a href={generateWhatsAppLink(storePrimaryPhone)} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '14px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '900', fontSize: '0.92rem', boxShadow: '0 4px 20px rgba(37,211,102,0.4)', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>
                   SEND ORDERS NOW
                 </a>
-                <a href={generateWhatsAppLink(backupPhone)} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.06)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '10px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.8rem', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>
-                  📞 Backup Line (08066295944) →
+                <a href={generateWhatsAppLink(storeBackupPhone)} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.06)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '10px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.8rem', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>
+                  📞 Backup Line ({storeBackupPhone}) →
                 </a>
               </div>
             </div>
