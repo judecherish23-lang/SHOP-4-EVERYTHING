@@ -88,6 +88,8 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder'>('overview');
   const [isDark, setIsDark] = useState(true);
 
   // Authentication State
@@ -360,6 +362,14 @@ export default function Home() {
   const primaryPhone = '2349042797233';
   const backupPhone = '2348066295944';
 
+  const dashboardMenu = [
+    { id: 'overview', label: 'Overview', icon: '📊' },
+    { id: 'shop', label: 'Shop', icon: '🛍️' },
+    { id: 'orders', label: 'Orders', icon: '📦' },
+    { id: 'customers', label: 'Customers', icon: '👥' },
+    { id: 'founder', label: 'Founder', icon: '👑' },
+  ] as const;
+
   return (
     <div style={{ minHeight: '100vh', background: isDark ? '#090d16' : '#f8fafc', color: isDark ? '#f8fafc' : '#0f172a', transition: 'all 0.3s' }}>
       
@@ -477,6 +487,22 @@ export default function Home() {
                 🔐 Login / Sign In
               </button>
             )}
+
+            <button
+              onClick={() => setIsDashboardOpen(true)}
+              style={{
+                background: 'rgba(0, 242, 254, 0.14)',
+                color: '#00f2fe',
+                border: '1px solid rgba(0, 242, 254, 0.3)',
+                padding: '8px 16px',
+                borderRadius: '30px',
+                fontWeight: '800',
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+              }}
+            >
+              ☰ Dashboard
+            </button>
 
             {/* Cart Button */}
             <button
@@ -639,33 +665,113 @@ export default function Home() {
         </div>
       </main>
 
-      {/* ===== FOUNDER SECTION (DARLINGTINA JUDE & PHOTO) ===== */}
-      <section style={{ maxWidth: '1200px', margin: '40px auto', padding: '0 20px' }}>
-        <div className="glass-card" style={{ padding: '30px', display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', width: '140px', height: '140px', borderRadius: '50%', overflow: 'hidden', border: '3px solid #ff3366', boxShadow: '0 8px 30px rgba(255,51,106,0.3)', flexShrink: 0 }}>
-            <img src={authorImage} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </div>
+      {/* ===== DASHBOARD SLIDE-OUT PANEL ===== */}
+      {isDashboardOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(8px)' }} onClick={() => setIsDashboardOpen(false)}>
+          <div style={{ width: '360px', maxWidth: '90vw', height: '100%', background: isDark ? '#0f172a' : '#ffffff', padding: '20px', boxShadow: '-10px 0 30px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.72rem', fontWeight: '900', color: '#00f2fe', textTransform: 'uppercase', letterSpacing: '1px' }}>Store Dashboard</div>
+                <h3 style={{ margin: '4px 0 0 0', fontSize: '1.15rem', fontWeight: '900' }}>Manage your shop</h3>
+              </div>
+              <button onClick={() => setIsDashboardOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
 
-          <div style={{ flex: 1, minWidth: '260px' }}>
-            <span style={{ fontSize: '0.75rem', color: '#00f2fe', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              👑 STORE FOUNDER
-            </span>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '900', margin: '4px 0 8px 0' }}>{authorName}</h2>
-            <p style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#64748b', lineHeight: '1.6', margin: '0 0 14px 0' }}>
-              {authorBio}
-            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {dashboardMenu.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setDashboardSection(item.id)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: dashboardSection === item.id ? '1px solid #ff3366' : `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
+                    background: dashboardSection === item.id ? 'rgba(255,51,106,0.16)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                    color: isDark ? '#fff' : '#000',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {item.icon} {item.label}
+                </button>
+              ))}
+            </div>
 
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <a href={`https://wa.me/${primaryPhone}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '8px 16px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800' }}>
-                💬 Main Line: 09042797233
-              </a>
-              <a href={`https://wa.me/${backupPhone}`} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 16px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800' }}>
-                📞 Backup Line: 08066295944
-              </a>
+            <div style={{ borderRadius: '16px', padding: '14px', background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}>
+              {dashboardSection === 'overview' && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Overview</div>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(0,242,254,0.12)' }}><strong>{products.length}</strong> products live</div>
+                    <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(37,211,102,0.12)' }}><strong>{registeredUsers.length}</strong> registered users</div>
+                    <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,51,106,0.12)' }}><strong>{totalCartCount}</strong> items in cart</div>
+                  </div>
+                </div>
+              )}
+
+              {dashboardSection === 'shop' && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Shop Management</div>
+                  <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: isDark ? '#94a3b8' : '#64748b' }}>Upload products, edit catalog items, and keep your store fresh with new arrivals.</p>
+                  {canUserUpload && (
+                    <button onClick={() => { setIsDashboardOpen(false); setIsUploadOpen(true); }} style={{ marginTop: '8px', width: '100%', padding: '10px', borderRadius: '12px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', fontWeight: '900', border: 'none', cursor: 'pointer' }}>➕ Upload Item</button>
+                  )}
+                </div>
+              )}
+
+              {dashboardSection === 'orders' && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Orders</div>
+                  {cart.length === 0 ? (
+                    <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: isDark ? '#94a3b8' : '#64748b' }}>No pending order details yet. When a customer adds to cart, this panel will show the current order summary.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {cart.map((item) => (
+                        <div key={item.product.id} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)' }}>
+                          <div style={{ fontWeight: '800' }}>{item.product.title}</div>
+                          <div style={{ fontSize: '0.8rem', color: isDark ? '#94a3b8' : '#64748b' }}>Qty: {item.quantity} • ₦{(item.product.price * item.quantity).toLocaleString()}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {dashboardSection === 'customers' && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Customers & Access</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {registeredUsers.map((u) => (
+                      <div key={u.email} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontWeight: '800' }}>{u.email}</div>
+                        <div style={{ fontSize: '0.78rem', color: u.role === 'admin' ? '#ff3366' : u.isEligibleToUpload ? '#00f2fe' : '#94a3b8' }}>
+                          {u.role === 'admin' ? 'Admin' : u.isEligibleToUpload ? 'Upload access' : 'Buyer only'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {dashboardSection === 'founder' && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '10px' }}>Founder</div>
+                  <div style={{ position: 'relative', width: '100px', height: '100px', borderRadius: '50%', overflow: 'hidden', border: '3px solid #ff3366', marginBottom: '10px' }}>
+                    <img src={authorImage} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem' }}>{authorName}</h4>
+                  <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: isDark ? '#94a3b8' : '#64748b' }}>{authorBio}</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                    <a href={`https://wa.me/${primaryPhone}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>💬 Main Line: 09042797233</a>
+                    <a href={`https://wa.me/${backupPhone}`} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>📞 Backup Line: 08066295944</a>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </section>
+      )}
 
       {/* ===== LOGIN MODAL ===== */}
       {isLoginOpen && (
