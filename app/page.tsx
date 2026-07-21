@@ -24,6 +24,19 @@ interface User {
   isEligibleToUpload: boolean;
 }
 
+interface BroadcastEntry {
+  id: string;
+  subject: string;
+  message: string;
+  sentAt: string;
+  sentBy: string;
+}
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+};
+
 export default function Home() {
   const adminEmails = ['darlingjude9@gmail.com', 'judecherish233@gmail.com'];
 
@@ -99,6 +112,11 @@ export default function Home() {
   const [storePrimaryPhone, setStorePrimaryPhone] = useState('2349042797233');
   const [storeBackupPhone, setStoreBackupPhone] = useState('2348066295944');
   const [isDark, setIsDark] = useState(true);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallCard, setShowInstallCard] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [broadcasts, setBroadcasts] = useState<BroadcastEntry[]>([]);
+  const [activeBroadcast, setActiveBroadcast] = useState<BroadcastEntry | null>(null);
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -165,7 +183,54 @@ export default function Home() {
     if (savedPrimaryPhone) setStorePrimaryPhone(savedPrimaryPhone);
     const savedBackupPhone = localStorage.getItem('shop4everything_backup_phone');
     if (savedBackupPhone) setStoreBackupPhone(savedBackupPhone);
+
+    const savedBroadcasts = localStorage.getItem('shop4everything_broadcasts');
+    if (savedBroadcasts) {
+      try {
+        const parsed = JSON.parse(savedBroadcasts);
+        setBroadcasts(parsed);
+        const latest = parsed[0];
+        if (latest) setActiveBroadcast(latest);
+      } catch (e) {}
+    }
+
+    const savedLatestBroadcast = localStorage.getItem('shop4everything_latest_broadcast');
+    if (savedLatestBroadcast) {
+      try { setActiveBroadcast(JSON.parse(savedLatestBroadcast)); } catch (e) {}
+    }
+
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsInstalled(standalone);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setDeferredInstallPrompt(event as BeforeInstallPromptEvent);
+      setShowInstallCard(true);
+    };
+
+    const onAppInstalled = () => {
+      setIsInstalled(true);
+      setShowInstallCard(false);
+      setDeferredInstallPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+
+    const timer = window.setTimeout(() => {
+      if (!isInstalled) setShowInstallCard(true);
+    }, 1800);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+      window.clearTimeout(timer);
+    };
+  }, [isInstalled]);
 
   // Save to localStorage
   useEffect(() => {
@@ -244,6 +309,21 @@ export default function Home() {
     }
   };
 
+  const handleInstallClick = async () => {
+    if (!deferredInstallPrompt) {
+      setShowInstallCard(false);
+      return;
+    }
+
+    try {
+      await deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      setShowInstallCard(false);
+    } catch (error) {
+      console.log('Install prompt cancelled', error);
+    }
+  };
+
   // Login Handler
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,19 +378,23 @@ export default function Home() {
   // Add Item Handler (Local File Upload)
   const handleAddNewProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle || !newPrice) {
-      alert('Please enter title and price!');
+
+    const cleanTitle = newTitle.trim();
+    const parsedPrice = Number(newPrice);
+
+    if (!cleanTitle || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      alert('Please enter a valid title and price before publishing.');
       return;
     }
 
     const item: Product = {
       id: Date.now(),
-      title: newTitle,
+      title: cleanTitle,
       category: newCategory,
-      price: parseFloat(newPrice),
+      price: parsedPrice,
       image: newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
-      tag: newTag,
-      description: newDesc || 'High quality item.',
+      tag: newTag || '🟢 In Stock',
+      description: newDesc.trim() || 'High quality item.',
       addedBy: currentUser?.email
     };
 
@@ -319,7 +403,9 @@ export default function Home() {
     setNewPrice('');
     setNewImageFile('');
     setNewDesc('');
+    setNewTag('🟢 In Stock');
     setIsUploadOpen(false);
+    refreshEveryone('upload');
     alert('✅ New item uploaded successfully!');
   };
 
@@ -421,6 +507,24 @@ export default function Home() {
     if (typeof window === 'undefined') return;
 
     const payload = { type: kind, timestamp: Date.now() };
+
+    if (kind === 'broadcast') {
+      const entry: BroadcastEntry = {
+        id: `${Date.now()}`,
+        subject: broadcastSubject.trim() || 'New update available',
+        message: broadcastMessage.trim() || 'A fresh update is now available in SHOP4EVERYTHING.',
+        sentAt: new Date().toISOString(),
+        sentBy: currentUser?.email || 'admin'
+      };
+
+      const existing = JSON.parse(localStorage.getItem('shop4everything_broadcasts') || '[]');
+      const updated = [entry, ...existing].slice(0, 8);
+      localStorage.setItem('shop4everything_broadcasts', JSON.stringify(updated));
+      localStorage.setItem('shop4everything_latest_broadcast', JSON.stringify(entry));
+      setBroadcasts(updated);
+      setActiveBroadcast(entry);
+    }
+
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         const channel = new BroadcastChannel('shop4everything-sync');
@@ -432,7 +536,7 @@ export default function Home() {
       console.log('Sync failed', error);
     }
 
-    window.setTimeout(() => window.location.reload(), 300);
+    window.setTimeout(() => window.location.reload(), 250);
   };
 
   const dashboardMenu = [
@@ -579,24 +683,6 @@ export default function Home() {
               ☰ Dashboard
             </button>
 
-            {isUserAdmin && (
-              <button
-                onClick={() => setIsBroadcastOpen(true)}
-                style={{
-                  background: 'rgba(255, 51, 106, 0.15)',
-                  color: '#ff3366',
-                  border: '1px solid #ff3366',
-                  padding: '8px 14px',
-                  borderRadius: '30px',
-                  fontWeight: '800',
-                  fontSize: '0.78rem',
-                  cursor: 'pointer',
-                }}
-              >
-                📣 Broadcast
-              </button>
-            )}
-
             {/* Cart Button */}
             <button
               onClick={() => setIsCartOpen(true)}
@@ -626,6 +712,18 @@ export default function Home() {
         </div>
       </header>
 
+      {showInstallCard && !isInstalled && (
+        <section style={{ maxWidth: '1200px', margin: '20px auto 10px auto', padding: '0 20px' }}>
+          <div style={{ border: '1px solid rgba(0,242,254,0.35)', background: 'linear-gradient(135deg, rgba(0,242,254,0.18), rgba(255,51,106,0.14))', borderRadius: '20px', padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#00f2fe', textTransform: 'uppercase' }}>Install app</div>
+              <div style={{ fontSize: '0.9rem', color: isDark ? '#f8fafc' : '#0f172a', marginTop: '4px' }}>Get the full SHOP4EVERYTHING app experience and keep your shopping fast.</div>
+            </div>
+            <button onClick={handleInstallClick} style={{ background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '999px', padding: '10px 16px', fontWeight: '900', cursor: 'pointer' }}>Install App</button>
+          </div>
+        </section>
+      )}
+
       {/* ===== HERO BANNER ===== */}
       <section style={{ maxWidth: '1200px', margin: '20px auto 10px auto', padding: '0 20px', textAlign: 'center' }}>
         <div className="glass-card" style={{ padding: '36px 20px', background: isDark ? 'radial-gradient(ellipse at top, rgba(255,51,106,0.15), rgba(9,13,22,0.6))' : 'radial-gradient(ellipse at top, rgba(0,242,254,0.15), #ffffff)' }}>
@@ -640,6 +738,16 @@ export default function Home() {
           </p>
         </div>
       </section>
+
+      {activeBroadcast && (
+        <section style={{ maxWidth: '1200px', margin: '15px auto 0 auto', padding: '0 20px' }}>
+          <div style={{ borderRadius: '18px', padding: '14px 16px', background: 'linear-gradient(135deg, rgba(255,51,106,0.16), rgba(0,242,254,0.12))', border: '1px solid rgba(255,255,255,0.12)' }}>
+            <div style={{ fontSize: '0.74rem', fontWeight: '900', color: '#ff3366', textTransform: 'uppercase', letterSpacing: '1px' }}>Live broadcast</div>
+            <div style={{ fontSize: '1rem', fontWeight: '900', marginTop: '4px' }}>{activeBroadcast.subject}</div>
+            <div style={{ fontSize: '0.9rem', color: isDark ? '#cbd5e1' : '#475569', marginTop: '6px' }}>{activeBroadcast.message}</div>
+          </div>
+        </section>
+      )}
 
       {/* ===== CATEGORY FILTER TABS ===== */}
       <section style={{ maxWidth: '1200px', margin: '15px auto', padding: '0 20px', overflowX: 'auto' }}>
@@ -865,15 +973,25 @@ export default function Home() {
               {dashboardSection === 'broadcast' && isUserAdmin && (
                 <div>
                   <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Admin Broadcast</div>
-                  <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: isDark ? '#94a3b8' : '#64748b' }}>Send an announcement to all registered users about a new product or update.</p>
+                  <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: isDark ? '#94a3b8' : '#64748b' }}>Send a message that reaches every registered user and admin instantly on the storefront.</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
                     <input value={broadcastSubject} onChange={(e) => setBroadcastSubject(e.target.value)} placeholder="Subject" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
                     <textarea value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} rows={5} placeholder="Message" style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000' }} />
                     <button onClick={() => {
-                      setBroadcastStatus('Broadcast queued for all registered users.');
+                      setBroadcastStatus('Broadcast sent to all registered users and admins.');
                       refreshEveryone('broadcast');
                     }} style={{ padding: '10px', borderRadius: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer' }}>📣 Send Broadcast</button>
                     {broadcastStatus && <div style={{ fontSize: '0.8rem', color: '#00f2fe' }}>{broadcastStatus}</div>}
+                    {broadcasts.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                        {broadcasts.slice(0, 3).map((item) => (
+                          <div key={item.id} style={{ padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)' }}>
+                            <div style={{ fontWeight: '800', fontSize: '0.8rem' }}>{item.subject}</div>
+                            <div style={{ fontSize: '0.74rem', color: isDark ? '#94a3b8' : '#64748b', marginTop: '2px' }}>{item.message}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
