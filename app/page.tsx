@@ -7,6 +7,7 @@ interface Product {
   title: string;
   category: string;
   price: number;
+  originalPrice?: number;
   image: string;
   tag: string;
   description: string;
@@ -46,6 +47,7 @@ export default function Home() {
       title: "Luxury Designer Silk Outfit",
       category: "Fashion & Clothings",
       price: 28500,
+      originalPrice: 45000,
       image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
       tag: "🔥 Hot Fashion",
       description: "Premium quality designer silk gown with elegant finishing."
@@ -55,6 +57,7 @@ export default function Home() {
       title: "Classic Leather Fashion Handbag",
       category: "Bags & Footwear",
       price: 35000,
+      originalPrice: 42000,
       image: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&auto=format&fit=crop&q=80",
       tag: "✨ New Arrival",
       description: "Handcrafted genuine leather shoulder bag with gold metallic accents."
@@ -73,6 +76,7 @@ export default function Home() {
       title: "Luxury Oud & Floral Perfume Set",
       category: "Female Beauty & Perfumes",
       price: 24500,
+      originalPrice: 30000,
       image: "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=600&auto=format&fit=crop&q=80",
       tag: "✨ Hot Deal",
       description: "Long-lasting premium designer fragrance spray."
@@ -91,6 +95,7 @@ export default function Home() {
       title: "Multi-Speed Kitchen Blender & Food Processor",
       category: "Kitchen & Appliances",
       price: 32000,
+      originalPrice: 40000,
       image: "https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=600&auto=format&fit=crop&q=80",
       tag: "🍳 Kitchen Utility",
       description: "Heavy-duty electric smoothie blender with stainless steel blades."
@@ -145,6 +150,7 @@ export default function Home() {
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('Fashion & Clothings');
   const [newPrice, setNewPrice] = useState('');
+  const [newOriginalPrice, setNewOriginalPrice] = useState('');
   const [newTag, setNewTag] = useState('🟢 In Stock');
   const [newDesc, setNewDesc] = useState('');
   const [newImageFile, setNewImageFile] = useState<string>('');
@@ -153,6 +159,7 @@ export default function Home() {
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('Fashion & Clothings');
   const [editPrice, setEditPrice] = useState('');
+  const [editOriginalPrice, setEditOriginalPrice] = useState('');
   const [editTag, setEditTag] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editImageFile, setEditImageFile] = useState<string>('');
@@ -381,6 +388,7 @@ export default function Home() {
 
     const cleanTitle = newTitle.trim();
     const parsedPrice = Number(newPrice);
+    const parsedOriginalPrice = Number(newOriginalPrice);
 
     if (!cleanTitle || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
       alert('Please enter a valid title and price before publishing.');
@@ -392,6 +400,7 @@ export default function Home() {
       title: cleanTitle,
       category: newCategory,
       price: parsedPrice,
+      originalPrice: parsedOriginalPrice > 0 ? parsedOriginalPrice : undefined,
       image: newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
       tag: newTag || '🟢 In Stock',
       description: newDesc.trim() || 'High quality item.',
@@ -401,6 +410,7 @@ export default function Home() {
     setProducts(prev => [item, ...prev]);
     setNewTitle('');
     setNewPrice('');
+    setNewOriginalPrice('');
     setNewImageFile('');
     setNewDesc('');
     setNewTag('🟢 In Stock');
@@ -415,6 +425,7 @@ export default function Home() {
     setEditTitle(product.title);
     setEditCategory(product.category);
     setEditPrice(product.price.toString());
+    setEditOriginalPrice(product.originalPrice ? product.originalPrice.toString() : '');
     setEditTag(product.tag);
     setEditDesc(product.description);
     setEditImageFile(product.image);
@@ -432,6 +443,7 @@ export default function Home() {
             title: editTitle,
             category: editCategory,
             price: parseFloat(editPrice),
+            originalPrice: parseFloat(editOriginalPrice) || undefined,
             tag: editTag,
             description: editDesc,
             image: editImageFile || p.image
@@ -838,8 +850,15 @@ export default function Home() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-                    <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#ff3366' }}>
-                      ₦{product.price.toLocaleString()}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#ff3366' }}>
+                        ₦{product.price.toLocaleString()}
+                      </div>
+                      {product.originalPrice && product.originalPrice > product.price && (
+                        <div style={{ fontSize: '0.85rem', color: isDark ? '#64748b' : '#94a3b8', textDecoration: 'line-through', fontWeight: '600' }}>
+                          ₦{product.originalPrice.toLocaleString()}
+                        </div>
+                      )}
                     </div>
 
                     <button
@@ -1081,9 +1100,16 @@ export default function Home() {
                     {categories.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Price (₦)</label>
-                  <input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="25000" required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Actual Price (₦)</label>
+                  <input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="80000" required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Fake Price (Optional)</label>
+                  <input type="number" value={newOriginalPrice} onChange={(e) => setNewOriginalPrice(e.target.value)} placeholder="100000" style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
                 </div>
               </div>
 
@@ -1144,9 +1170,16 @@ export default function Home() {
                     {categories.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Price (₦)</label>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Actual Price (₦)</label>
                   <input type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Fake Price (Optional)</label>
+                  <input type="number" value={editOriginalPrice} onChange={(e) => setEditOriginalPrice(e.target.value)} placeholder="100000" style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
                 </div>
               </div>
 
