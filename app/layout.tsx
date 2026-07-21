@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Boutique Store | Fashion, Wares & Accessories",
+  title: "SHOP4EVERYTHING",
   description: "Modern online shopping store with instant WhatsApp ordering and live automatic price calculation.",
 };
 
