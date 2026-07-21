@@ -1,7 +1,7 @@
 {
   "name": "SHOP4EVERYTHING",
-  "short_name": "SHOP4EVERYTHING",
-  "description": "Modern online shopping store with instant WhatsApp ordering and live automatic price calculation.",
+  "short_name": "Shop4All",
+  "description": "Online Varieties, Wares & Decor",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#090d16",
