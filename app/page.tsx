@@ -640,7 +640,7 @@ export default function Home() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {dashboardMenu.map((item) => (
-                <button key={item.id} onClick={() => setDashboardSection(item.id)} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: '12px', border: dashboardSection === item.id ? '1px solid #ff3366' : `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`, background: dashboardSection === item.id ? 'rgba(255,51,106,0.16)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000', fontWeight: '800', cursor: 'pointer' }}>{item.icon} {item.label}</button>
+                <button key={item.id} onClick={() => setDashboardSection(item.id as any)} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: '12px', border: dashboardSection === item.id ? '1px solid #ff3366' : `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`, background: dashboardSection === item.id ? 'rgba(255,51,106,0.16)' : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', color: isDark ? '#fff' : '#000', fontWeight: '800', cursor: 'pointer' }}>{item.icon} {item.label}</button>
               ))}
             </div>
 
