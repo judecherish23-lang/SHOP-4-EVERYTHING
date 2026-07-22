@@ -695,7 +695,16 @@ export default function Home() {
                       <span style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>Send a new broadcast:</span>
                       <input value={broadcastSubject} onChange={(e) => setBroadcastSubject(e.target.value)} placeholder="Subject" style={{ padding: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
                       <textarea value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} rows={3} placeholder="Message body..." style={{ padding: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
-                      <button onClick={handleSendBroadcast} style={{ padding: '8px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Send to Everyone</button>
+                      
+                      <button onClick={handleSendBroadcast} style={{ padding: '8px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Send to Storefront Banner</button>
+
+                      <a 
+                        href={`mailto:${registeredUsers.map(u => u.email).join(',')}?subject=${encodeURIComponent(broadcastSubject)}&body=${encodeURIComponent(broadcastMessage)}`}
+                        style={{ padding: '8px', borderRadius: '8px', background: '#00f2fe', color: '#000', fontWeight: 'bold', textAlign: 'center', textDecoration: 'none', fontSize: '0.8rem' }}
+                      >
+                        📧 Send to Users' Emails ({registeredUsers.length} Recipients)
+                      </a>
+
                       {broadcastStatus && <div style={{ fontSize: '0.75rem', color: '#00f2fe' }}>{broadcastStatus}</div>}
                     </div>
                   )}
