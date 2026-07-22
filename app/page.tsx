@@ -610,14 +610,14 @@ export default function Home() {
                     <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: '4px 0 6px 0', lineHeight: '1.3' }}>{product.title}</h3>
                     <p style={{ fontSize: '0.8rem', color: isDark ? '#94a3b8' : '#64748b', margin: '0 0 12px 0', lineHeight: '1.4' }}>{product.description}</p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, paddingTop: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
                       <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#ff3366' }}>{settings.currencySymbol}{product.price.toLocaleString()}</div>
                       {product.originalPrice && product.originalPrice > product.price && (
                         <div style={{ fontSize: '0.85rem', color: isDark ? '#64748b' : '#94a3b8', textDecoration: 'line-through', fontWeight: '600' }}>{settings.currencySymbol}{product.originalPrice.toLocaleString()}</div>
                       )}
                     </div>
-                    <button onClick={() => addToCart(product)} style={{ background: inCartQty > 0 ? '#25d366' : 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '20px', fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}>{inCartQty > 0 ? `Added (${inCartQty})` : '+ Cart'}</button>
+                    <button onClick={() => addToCart(product)} style={{ width: '100%', background: inCartQty > 0 ? '#25d366' : 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '20px', fontWeight: '800', fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>{inCartQty > 0 ? `Added to Cart (${inCartQty}) ✓` : '+ Add to Cart'}</button>
                   </div>
                 </div>
               </div>
