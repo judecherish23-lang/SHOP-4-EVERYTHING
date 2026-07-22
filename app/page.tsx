@@ -8,11 +8,11 @@ interface Product {
   title: string;
   category: string;
   price: number;
-  originalPrice?: number;
+  originalPrice?: number | null;
   image: string;
   tag: string;
   description: string;
-  addedBy?: string;
+  addedBy?: string | null;
 }
 
 interface CartItem {
@@ -22,7 +22,7 @@ interface CartItem {
 
 interface User {
   email: string;
-  role: 'admin' | 'seller' | 'buyer';
+  role: string;
   isEligibleToUpload: boolean;
 }
 
@@ -92,7 +92,7 @@ export default function Home() {
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastStatus, setBroadcastStatus] = useState('');
   
-  const [isDark, setIsDark] = useState(true);
+  const isDark = true; // Hardcoded to satisfy Vercel's unused variable rules
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallCard, setShowInstallCard] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -132,34 +132,35 @@ export default function Home() {
 
   // --- CLOUD FETCHING (SUPABASE) ---
   useEffect(() => {
+    const fetchGlobalData = async () => {
+      // 1. Fetch Products
+      const { data: prodData } = await supabase.from('products').select('*').order('id', { ascending: false });
+      if (prodData) setProducts(prodData as Product[]);
+  
+      // 2. Fetch Settings
+      const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
+      if (setData) {
+        setSettings(setData as StoreSettings);
+      } else {
+        // Initialize settings if empty
+        await supabase.from('store_settings').insert([settings]);
+      }
+  
+      // 3. Fetch Broadcasts
+      const { data: bcData } = await supabase.from('broadcasts').select('*').order('created_at', { ascending: false });
+      if (bcData && bcData.length > 0) {
+        setBroadcasts(bcData as BroadcastEntry[]);
+        setActiveBroadcast(bcData[0] as BroadcastEntry);
+      }
+  
+      // 4. Fetch Users (Only visible/used safely by Admins in UI)
+      const { data: usrData } = await supabase.from('store_users').select('*');
+      if (usrData) setRegisteredUsers(usrData as User[]);
+    };
+
     fetchGlobalData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const fetchGlobalData = async () => {
-    // 1. Fetch Products
-    const { data: prodData } = await supabase.from('products').select('*').order('id', { ascending: false });
-    if (prodData) setProducts(prodData as Product[]);
-
-    // 2. Fetch Settings
-    const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
-    if (setData) {
-      setSettings(setData as StoreSettings);
-    } else {
-      // Initialize settings if empty
-      await supabase.from('store_settings').insert([settings]);
-    }
-
-    // 3. Fetch Broadcasts
-    const { data: bcData } = await supabase.from('broadcasts').select('*').order('created_at', { ascending: false });
-    if (bcData && bcData.length > 0) {
-      setBroadcasts(bcData as BroadcastEntry[]);
-      setActiveBroadcast(bcData[0] as BroadcastEntry);
-    }
-
-    // 4. Fetch Users (Only visible/used safely by Admins in UI)
-    const { data: usrData } = await supabase.from('store_users').select('*');
-    if (usrData) setRegisteredUsers(usrData as User[]);
-  };
 
   // --- LOCAL CACHE & PWA ---
   useEffect(() => {
@@ -244,7 +245,7 @@ export default function Home() {
     const isAdmin = adminEmails.includes(emailClean);
 
     // Check if user exists in cloud
-    let { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
+    const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
 
     let loggedUser: User;
 
@@ -253,7 +254,7 @@ export default function Home() {
       loggedUser = {
         email: emailClean,
         role: isAdmin ? 'admin' : 'buyer',
-        isEligibleToUpload: isAdmin ? true : false
+        isEligibleToUpload: isAdmin
       };
       await supabase.from('store_users').insert([loggedUser]);
       setRegisteredUsers(prev => [...prev, loggedUser]);
@@ -328,7 +329,7 @@ export default function Home() {
       image: newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
       tag: newTag || '🟢 In Stock',
       description: newDesc.trim() || 'High quality item.',
-      addedBy: currentUser?.email
+      addedBy: currentUser?.email || null
     };
 
     const { data, error } = await supabase.from('products').insert([newItem]).select();
@@ -464,7 +465,6 @@ export default function Home() {
     ...(isUserAdmin ? [{ id: 'customers', label: 'User Roles', icon: '👥' }, { id: 'settings', label: 'Global Settings', icon: '⚙️' }] : [])
   ] as const;
 
-
   if (settings.maintenanceMode && !isUserAdmin) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#090d16', color: '#fff', textAlign: 'center', padding: '20px' }}>
@@ -477,7 +477,10 @@ export default function Home() {
         {isLoginOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)' }}>
           <div className="glass-card" style={{ maxWidth: '400px', width: '100%', padding: '28px', background: '#111' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#00f2fe' }}>Admin Bypass</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: '#00f2fe' }}>Admin Bypass</h3>
+              <button onClick={() => setIsLoginOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
             <form onSubmit={handleLogin}>
               <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Admin Email" required style={{ width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '5px', background: '#222', border: 'none', color: '#fff' }} />
               <button type="submit" style={{ width: '100%', padding: '10px', background: '#ff3366', color: '#fff', border: 'none', borderRadius: '5px' }}>Unlock</button>
