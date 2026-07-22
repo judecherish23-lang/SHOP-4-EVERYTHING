@@ -318,7 +318,9 @@ export default function Home() {
 
   const handleInstallClick = async () => {
     if (!deferredInstallPrompt) {
-      alert("To install this app, tap your browser's menu (three dots in the top right) and select 'Install app' or 'Add to Home screen'.");
+      // Modern silent fallback: Hide the popup card permanently if the prompt event isn't available
+      setShowInstallCard(false);
+      localStorage.setItem('shop4everything_install_dismissed', 'true');
       return;
     }
 
@@ -336,11 +338,14 @@ export default function Home() {
         console.log('User dismissed the install prompt');
       }
       
-      // Clear the deferred prompt so it can only be used once
+      // Clear the deferred prompt and hide the card permanently
       setDeferredInstallPrompt(null);
       setShowInstallCard(false);
+      localStorage.setItem('shop4everything_install_dismissed', 'true');
     } catch (error) {
       console.log('Install prompt error', error);
+      setShowInstallCard(false);
+      localStorage.setItem('shop4everything_install_dismissed', 'true');
     }
   };
 
