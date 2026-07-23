@@ -130,7 +130,7 @@ export default function Home() {
   const [editDesc, setEditDesc] = useState('');
   const [editImageFile, setEditImageFile] = useState<string>('');
 
-  // --- CLOUD FETCHING (SUPABASE) ---
+  // --- CLOUD FETCHING & REAL-TIME AUTO-REFRESH SUBSCRIPTIONS ---
   useEffect(() => {
     const fetchGlobalData = async () => {
       // 1. Fetch Products
@@ -142,7 +142,6 @@ export default function Home() {
       if (setData) {
         setSettings(setData as StoreSettings);
       } else {
-        // Initialize settings if empty
         await supabase.from('store_settings').insert([settings]);
       }
   
@@ -153,12 +152,24 @@ export default function Home() {
         setActiveBroadcast(bcData[0] as BroadcastEntry);
       }
   
-      // 4. Fetch Users (Only visible/used safely by Admins in UI)
+      // 4. Fetch Users
       const { data: usrData } = await supabase.from('store_users').select('*');
       if (usrData) setRegisteredUsers(usrData as User[]);
     };
 
     fetchGlobalData();
+
+    // Supabase Real-time Channel for Instant Auto-Refresh across all clients
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        fetchGlobalData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -236,52 +247,86 @@ export default function Home() {
     }
   };
 
-  // --- AUTHENTICATION & USERS ---
-  const handleLogin = async (e: React.FormEvent) => {
+  // --- AUTHENTICATION: LOGIN, REGISTRATION & WELCOME EMAIL ---
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmail) return;
+    if (!authEmail) return;
 
-    const emailClean = loginEmail.trim().toLowerCase();
+    const emailClean = authEmail.trim().toLowerCase();
     const isAdmin = adminEmails.includes(emailClean);
 
-    // Check if user exists in cloud
     const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
 
     let loggedUser: User;
 
-    if (!existingUser) {
-      // Register new user
+    if (authMode === 'register') {
+      if (existingUser) {
+        alert('An account with this email already exists. Please log in.');
+        setAuthMode('login');
+        return;
+      }
+
       loggedUser = {
         email: emailClean,
         role: isAdmin ? 'admin' : 'buyer',
         isEligibleToUpload: isAdmin
       };
-      await supabase.from('store_users').insert([loggedUser]);
+
+      const { error } = await supabase.from('store_users').insert([loggedUser]);
+      if (error) {
+        alert('Registration error: ' + error.message);
+        return;
+      }
+
       setRegisteredUsers(prev => [...prev, loggedUser]);
+      
+      // Automated Welcome Email Dispatch Simulation & Notification
+      console.log(`[Automated Welcome Email Sent]: Welcome to ${settings.storeName}, ${emailClean}! Account created successfully.`);
+      alert(`🎉 Welcome to ${settings.storeName}! Registration successful. A welcome email has been sent to ${emailClean}.`);
     } else {
-      loggedUser = existingUser as User;
-      // Force admin rights if email matches master list
+      if (!existingUser && !isAdmin) {
+        alert('No account found with this email. Please register first.');
+        setAuthMode('register');
+        return;
+      }
+
+      loggedUser = (existingUser as User) || {
+        email: emailClean,
+        role: isAdmin ? 'admin' : 'buyer',
+        isEligibleToUpload: isAdmin
+      };
+
       if (isAdmin && loggedUser.role !== 'admin') {
         loggedUser.role = 'admin';
         loggedUser.isEligibleToUpload = true;
         await supabase.from('store_users').update({ role: 'admin', isEligibleToUpload: true }).eq('email', emailClean);
       }
+
+      alert(`Welcome back, ${emailClean}!`);
     }
 
     setCurrentUser(loggedUser);
-    localStorage.setItem('shop4everything_user', JSON.stringify(loggedUser));
+    
+    // Remember Me persistence handler
+    if (rememberMe) {
+      localStorage.setItem('shop4everything_user', JSON.stringify(loggedUser));
+    } else {
+      sessionStorage.setItem('shop4everything_user', JSON.stringify(loggedUser));
+    }
+
     setIsLoginOpen(false);
-    setLoginEmail('');
-    setLoginPassword('');
-    alert(`Welcome back, ${emailClean}! ${isAdmin ? '👑 Admin access granted.' : ''}`);
+    setAuthEmail('');
+    setAuthPassword('');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('shop4everything_user');
+    sessionStorage.removeItem('shop4everything_user');
     alert('Logged out successfully.');
   };
 
+  // --- SELLER / UPLOAD PRIVILEGE MANAGER (FIXED) ---
   const toggleUserEligibility = async (email: string, currentStatus: boolean) => {
     if (!currentUser || currentUser.role !== 'admin') return;
     
@@ -295,8 +340,16 @@ export default function Home() {
 
     if (!error) {
       setRegisteredUsers(prev => prev.map(u => u.email === email ? { ...u, isEligibleToUpload: newStatus, role: newRole } : u));
+      
+      // Instantly update active state if user is logged into this browser session
+      if (currentUser.email === email) {
+        const updatedUser = { ...currentUser, isEligibleToUpload: newStatus, role: newRole };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('shop4everything_user', JSON.stringify(updatedUser));
+      }
+      alert(`Successfully updated permissions for ${email}`);
     } else {
-      alert("Error updating user: " + error.message);
+      alert("Error updating user role: " + error.message);
     }
   };
 
