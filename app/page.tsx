@@ -2,6 +2,9 @@
 
 import { useState, useEffect, ChangeEvent } from 'react';
 import { supabase } from '../lib/supabase';
+const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
+  const [showInstallCard, setShowInstallCard] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
 
 interface Product {
   id: number;
