@@ -885,17 +885,37 @@ return () => {
                   )}
 
                   {/* Broadcast Feed */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {broadcasts.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>No messages yet.</p> : 
-                      broadcasts.map(b => (
-                        <div key={b.id} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', borderLeft: '3px solid #ff3366' }}>
-                          <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>{b.subject}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>{b.message}</div>
-                          <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '8px', textAlign: 'right' }}>Sent by {b.sentBy} on {new Date(b.created_at).toLocaleDateString()}</div>
-                        </div>
-                      ))
-                    }
-                  </div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+  {broadcasts.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>No messages yet.</p> : 
+    broadcasts.map(b => (
+      <div key={b.id} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', borderLeft: '3px solid #ff3366', position: 'relative' }}>
+        
+        {/* Admin Delete Button */}
+        {isUserAdmin && (
+          <button 
+            onClick={async () => {
+              if (confirm('Are you sure you want to delete this broadcast?')) {
+                const { error } = await supabase.from('broadcasts').delete().eq('id', b.id);
+                if (!error) {
+                  setBroadcasts(prev => prev.filter(item => item.id !== b.id));
+                  if (activeBroadcast?.id === b.id) setActiveBroadcast(null);
+                } else {
+                  alert('Error deleting broadcast: ' + error.message);
+                }
+              }
+            }} 
+            style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 'bold', cursor: 'pointer' }}>
+            🗑️ Delete
+          </button>
+        )}
+
+        <div style={{ fontWeight: '800', fontSize: '0.9rem', paddingRight: isUserAdmin ? '50px' : '0' }}>{b.subject}</div>
+        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>{b.message}</div>
+        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '8px', textAlign: 'right' }}>Sent by {b.sentBy} on {new Date(b.created_at).toLocaleDateString()}</div>
+      </div>
+    ))
+  }
+</div>
                 </div>
               )}
 
