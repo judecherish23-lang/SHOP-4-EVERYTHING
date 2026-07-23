@@ -155,8 +155,22 @@ export default function Home() {
     // Supabase Real-time Channel for Instant Auto-Refresh across all clients
     const channel = supabase
       .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        fetchGlobalData();
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        fetchGlobalData(); // Refreshes products/broadcasts instantly
+
+        // REAL-TIME SESSION HIJACK: Instantly update active user permissions if changed by Admin
+        if (payload.table === 'store_users' && payload.eventType === 'UPDATE') {
+          const storedLocal = localStorage.getItem('shop4everything_user');
+          const storedSession = sessionStorage.getItem('shop4everything_user');
+          const activeStoredUser = storedLocal ? JSON.parse(storedLocal) : (storedSession ? JSON.parse(storedSession) : null);
+          
+          if (activeStoredUser && activeStoredUser.email === payload.new.email) {
+            const updatedLiveUser = { ...activeStoredUser, role: payload.new.role, isEligibleToUpload: payload.new.isEligibleToUpload };
+            setCurrentUser(updatedLiveUser);
+            if (storedLocal) localStorage.setItem('shop4everything_user', JSON.stringify(updatedLiveUser));
+            if (storedSession) sessionStorage.setItem('shop4everything_user', JSON.stringify(updatedLiveUser));
+          }
+        }
       })
       .subscribe();
 
@@ -275,9 +289,24 @@ export default function Home() {
 
       setRegisteredUsers(prev => [...prev, loggedUser]);
       
-      // Automated Welcome Email Dispatch Simulation & Notification
-      console.log(`[Automated Welcome Email Sent]: Welcome to ${settings.storeName}, ${emailClean}! Account created successfully.`);
-      alert(`🎉 Welcome to ${settings.storeName}! Registration successful. A welcome email has been dispatched to ${emailClean}.`);
+      // Dispatch Real Welcome Email via Backend API
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: emailClean,
+            subject: `🎉 Welcome to ${settings.storeName}!`,
+            message: `Hello there,\n\nYour account has been successfully created. You now have full access to browse, save your cart, and stay updated with our latest collections.\n\nThank you for joining us!`,
+            type: 'welcome',
+            storeName: settings.storeName
+          })
+        });
+      } catch (err) {
+        console.error("Welcome email failed to send.");
+      }
+      
+      alert(`🎉 Registration successful! A welcome email has been sent directly to ${emailClean}.`);
     } else {
       if (!existingUser && !isAdmin) {
         alert('No account found with this email. Please register first.');
@@ -484,7 +513,7 @@ export default function Home() {
       sentBy: currentUser?.email || 'admin'
     };
 
-    // 1. Push broadcast to Supabase (instantly updates storefront banner for everyone via real-time subscription)
+    // 1. Push to Supabase (instantly updates UI via Real-Time WebSockets)
     const { data, error } = await supabase.from('broadcasts').insert([entry]).select();
     if (error) {
       alert('Broadcast error: ' + error.message);
@@ -496,11 +525,27 @@ export default function Home() {
       setActiveBroadcast(data[0] as BroadcastEntry);
     }
 
-    // 2. Automated Email Broadcast loop to all registered member emails in database
+    // 2. Trigger Real Backend Email Dispatcher
     const allEmails = registeredUsers.map(u => u.email);
-    console.log(`[Automated Email Dispatcher]: Broadcasting email to ${allEmails.length} registered members:`, allEmails);
+    setBroadcastStatus('Sending secure emails to all users...');
+    
+    try {
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: allEmails,
+          subject: `📢 ${broadcastSubject}`,
+          message: broadcastMessage,
+          type: 'broadcast',
+          storeName: settings.storeName
+        })
+      });
+      setBroadcastStatus(`✅ Broadcast banner updated and Real Emails dispatched to ${allEmails.length} members!`);
+    } catch (err) {
+      setBroadcastStatus('⚠️ Banner updated, but email dispatch failed.');
+    }
 
-    setBroadcastStatus(`✅ Broadcast deployed to storefront banner and emailed automatically to all ${allEmails.length} registered members!`);
     setBroadcastSubject('');
     setBroadcastMessage('');
     setTimeout(() => setBroadcastStatus(''), 5000);
