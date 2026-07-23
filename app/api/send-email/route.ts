@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
+
+// Initialize Resend with your environment variable
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
     const { to, subject, type, message, storeName } = await req.json();
-
-    // STRICT SMTP CONFIG FOR VERCEL: Do not use the generic "service: 'gmail'"
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // Use SSL
-      auth: {
-        user: 'darlingjude9@gmail.com', 
-        pass: 'vefa ibft raga pjge' // Your App Password
-      }
-    });
 
     const buttonText = type === 'welcome' ? 'COMPLETE YOUR REGISTRATION' : 'VIEW LATEST UPDATES';
     const siteUrl = 'https://shop-4-everything.vercel.app'; 
@@ -53,37 +45,18 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    const mailOptions = {
-      from: `"${storeName}" <darlingjude9@gmail.com>`,
-      to: Array.isArray(to) ? to.join(',') : to,
+    // Fire the email via Resend
+    const data = await resend.emails.send({
+      from: `${storeName} <onboarding@resend.dev>`, // MUST be this exact email for Sandbox mode
+      to: Array.isArray(to) ? to : [to],            // MUST be your registered Resend email address
       subject: subject,
-      html: htmlTemplate
-    };
-
-    // VERCEL TIMEOUT FIX: Force the server to wait until the SMTP handshake completely finishes
-    await new Promise((resolve, reject) => {
-      transporter.verify(function(error, success) {
-        if (error) {
-          console.log("SMTP Connection Error:", error);
-          reject(error);
-        } else {
-          transporter.sendMail(mailOptions, (err, info) => {
-            if (err) {
-              console.error('SMTP Send Error:', err);
-              reject(err);
-            } else {
-              console.log('Email sent successfully:', info.response);
-              resolve(info);
-            }
-          });
-        }
-      });
+      html: htmlTemplate,
     });
 
-    return NextResponse.json({ success: true, message: 'Email dispatched successfully' });
+    return NextResponse.json({ success: true, data });
 
   } catch (error: any) {
-    console.error('Email API Error:', error);
+    console.error('Resend API Error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
