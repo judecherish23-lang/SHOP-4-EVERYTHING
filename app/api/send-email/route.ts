@@ -59,7 +59,19 @@ export async function POST(req: Request) {
       html: htmlTemplate
     };
 
-    await transporter.sendMail(mailOptions);
+    // Vercel Serverless Fix: Wrap sendMail in a Promise to prevent premature timeout
+    await new Promise((resolve, reject) => {
+      transporter.sendMail(mailOptions, (err, info) => {
+        if (err) {
+          console.error('SMTP Send Error:', err);
+          reject(err);
+        } else {
+          console.log('Email sent successfully:', info.response);
+          resolve(info);
+        }
+      });
+    });
+
     return NextResponse.json({ success: true, message: 'Email dispatched successfully' });
 
   } catch (error: any) {
