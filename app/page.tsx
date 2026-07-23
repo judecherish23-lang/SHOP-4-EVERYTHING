@@ -713,8 +713,6 @@ return () => {
             ) : (
               <button onClick={() => setIsLoginOpen(true)} style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '8px 16px', borderRadius: '30px', fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}>🔐 Login / Register</button>
             )}
-
-            <button onClick={() => setIsDashboardOpen(true)} style={{ background: 'rgba(0, 242, 254, 0.14)', color: '#00f2fe', border: '1px solid rgba(0, 242, 254, 0.3)', padding: '8px 16px', borderRadius: '30px', fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}>☰ Dashboard</button>
             
             <button onClick={() => setIsCartOpen(true)} style={{ background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '30px', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span>🛒 Cart</span>
@@ -723,6 +721,35 @@ return () => {
           </div>
         </div>
       </header>
+
+      {/* ===== FLOATING MODERN MENU BUTTON (TOP LEFT) ===== */}
+      <button 
+        onClick={() => setIsDashboardOpen(true)} 
+        style={{
+          position: 'fixed',
+          top: '20px',
+          left: '20px',
+          zIndex: 40,
+          background: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(12px)',
+          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)'}`,
+          color: '#00f2fe',
+          width: '42px',
+          height: '42px',
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.2rem',
+          fontWeight: '900',
+          cursor: 'pointer',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          transition: 'all 0.2s ease'
+        }}
+        title="Open Dashboard Menu"
+      >
+        ⋮
+      </button>
 
       {showInstallCard && !isInstalled && (
         <section style={{ maxWidth: '1200px', margin: '20px auto 10px auto', padding: '0 20px' }}>
