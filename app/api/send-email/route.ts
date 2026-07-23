@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
     const { to, subject, type, message, storeName } = await req.json();
-
-    // Configure your actual Gmail SMTP here. 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'darlingjude9@gmail.com', 
-        pass: 'vefa ibft raga pjge' 
-      }
-    });
 
     const buttonText = type === 'welcome' ? 'ACCESS YOUR DASHBOARD' : 'VIEW LATEST UPDATES';
     const siteUrl = 'https://shop-4-everything.vercel.app'; 
@@ -46,36 +39,22 @@ export async function POST(req: Request) {
           <!-- Footer -->
           <div style="background-color: #030712; padding: 20px; text-align: center;">
             <p style="color: #64748b; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
-            <p style="color: #475569; font-size: 11px; margin-top: 8px;">You are receiving this because you are a registered member.</p>
           </div>
         </div>
       </div>
     `;
 
-    const mailOptions = {
-      from: `"${storeName}" <darlingjude9@gmail.com>`,
-      to: Array.isArray(to) ? to.join(',') : to,
+    const data = await resend.emails.send({
+      from: `${storeName} <onboarding@resend.dev>`, // Replace with your domain once verified on Resend
+      to: Array.isArray(to) ? to : [to],
       subject: subject,
-      html: htmlTemplate
-    };
-
-    // Vercel Serverless Fix: Wrap sendMail in a Promise to prevent premature timeout
-    await new Promise((resolve, reject) => {
-      transporter.sendMail(mailOptions, (err, info) => {
-        if (err) {
-          console.error('SMTP Send Error:', err);
-          reject(err);
-        } else {
-          console.log('Email sent successfully:', info.response);
-          resolve(info);
-        }
-      });
+      html: htmlTemplate,
     });
 
-    return NextResponse.json({ success: true, message: 'Email dispatched successfully' });
+    return NextResponse.json({ success: true, data });
 
   } catch (error: any) {
-    console.error('Email API Error:', error);
+    console.error('Resend API Error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
