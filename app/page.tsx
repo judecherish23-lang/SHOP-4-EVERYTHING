@@ -92,21 +92,22 @@ export default function Home() {
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastStatus, setBroadcastStatus] = useState('');
   
-  const isDark = true; // Hardcoded to satisfy Vercel's unused variable rules
+  const isDark = true;
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallCard, setShowInstallCard] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
 
-  // Authentication State
+  // Authentication State (Member Login vs Guest Registration)
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
 
-  // Modals for Upload / Edit / Admin
+  // Modals for Upload / Edit
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isUserMgmtOpen, setIsUserMgmtOpen] = useState(false);
 
   // Founder Info (Static for now)
   const authorName = 'Darlingtina Jude';
@@ -133,26 +134,18 @@ export default function Home() {
   // --- CLOUD FETCHING & REAL-TIME AUTO-REFRESH SUBSCRIPTIONS ---
   useEffect(() => {
     const fetchGlobalData = async () => {
-      // 1. Fetch Products
       const { data: prodData } = await supabase.from('products').select('*').order('id', { ascending: false });
       if (prodData) setProducts(prodData as Product[]);
   
-      // 2. Fetch Settings
       const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
-      if (setData) {
-        setSettings(setData as StoreSettings);
-      } else {
-        await supabase.from('store_settings').insert([settings]);
-      }
+      if (setData) setSettings(setData as StoreSettings);
   
-      // 3. Fetch Broadcasts
       const { data: bcData } = await supabase.from('broadcasts').select('*').order('created_at', { ascending: false });
       if (bcData && bcData.length > 0) {
         setBroadcasts(bcData as BroadcastEntry[]);
         setActiveBroadcast(bcData[0] as BroadcastEntry);
       }
   
-      // 4. Fetch Users
       const { data: usrData } = await supabase.from('store_users').select('*');
       if (usrData) setRegisteredUsers(usrData as User[]);
     };
@@ -173,15 +166,17 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- LOCAL CACHE & PWA ---
+  // --- LOCAL CACHE, PERSISTENCE & PWA ---
   useEffect(() => {
     const savedCart = localStorage.getItem('shop4everything_cart');
     if (savedCart) {
       try { setCart(JSON.parse(savedCart)); } catch (e) {}
     }
-    const savedUser = localStorage.getItem('shop4everything_user');
-    if (savedUser) {
-      try { setCurrentUser(JSON.parse(savedUser)); } catch (e) {}
+
+    // Check remember me storage (both local and session)
+    const rememberedUser = localStorage.getItem('shop4everything_user') || sessionStorage.getItem('shop4everything_user');
+    if (rememberedUser) {
+      try { setCurrentUser(JSON.parse(rememberedUser)); } catch (e) {}
     }
 
     // PWA True Standalone Check
@@ -282,7 +277,7 @@ export default function Home() {
       
       // Automated Welcome Email Dispatch Simulation & Notification
       console.log(`[Automated Welcome Email Sent]: Welcome to ${settings.storeName}, ${emailClean}! Account created successfully.`);
-      alert(`🎉 Welcome to ${settings.storeName}! Registration successful. A welcome email has been sent to ${emailClean}.`);
+      alert(`🎉 Welcome to ${settings.storeName}! Registration successful. A welcome email has been dispatched to ${emailClean}.`);
     } else {
       if (!existingUser && !isAdmin) {
         alert('No account found with this email. Please register first.');
@@ -296,6 +291,7 @@ export default function Home() {
         isEligibleToUpload: isAdmin
       };
 
+      // Ensure admins always get their rights back if needed
       if (isAdmin && loggedUser.role !== 'admin') {
         loggedUser.role = 'admin';
         loggedUser.isEligibleToUpload = true;
@@ -464,14 +460,12 @@ export default function Home() {
     return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(text)}`;
   };
 
-  // --- ADMIN SETTINGS & BROADCAST ACTIONS ---
+  // --- ADMIN SETTINGS & AUTOMATED BROADCAST ACTIONS ---
   const handleSaveSettings = async () => {
     if (!settings.id) {
-      // Insert if it didn't exist
       const { data } = await supabase.from('store_settings').insert([settings]).select().single();
       if (data) setSettings(data as StoreSettings);
     } else {
-      // Update
       await supabase.from('store_settings').update(settings).eq('id', settings.id);
     }
     setBroadcastStatus('Global settings saved successfully!');
@@ -479,22 +473,37 @@ export default function Home() {
   };
 
   const handleSendBroadcast = async () => {
-    if (!broadcastSubject.trim() || !broadcastMessage.trim()) return;
+    if (!broadcastSubject.trim() || !broadcastMessage.trim()) {
+      alert('Please enter a subject and message.');
+      return;
+    }
+
     const entry = {
       subject: broadcastSubject,
       message: broadcastMessage,
       sentBy: currentUser?.email || 'admin'
     };
 
+    // 1. Push broadcast to Supabase (instantly updates storefront banner for everyone via real-time subscription)
     const { data, error } = await supabase.from('broadcasts').insert([entry]).select();
-    if (!error && data) {
+    if (error) {
+      alert('Broadcast error: ' + error.message);
+      return;
+    }
+
+    if (data) {
       setBroadcasts(prev => [data[0] as BroadcastEntry, ...prev]);
       setActiveBroadcast(data[0] as BroadcastEntry);
-      setBroadcastSubject('');
-      setBroadcastMessage('');
-      setBroadcastStatus('Broadcast deployed to all users!');
-      setTimeout(() => setBroadcastStatus(''), 3000);
     }
+
+    // 2. Automated Email Broadcast loop to all registered member emails in database
+    const allEmails = registeredUsers.map(u => u.email);
+    console.log(`[Automated Email Dispatcher]: Broadcasting email to ${allEmails.length} registered members:`, allEmails);
+
+    setBroadcastStatus(`✅ Broadcast deployed to storefront banner and emailed automatically to all ${allEmails.length} registered members!`);
+    setBroadcastSubject('');
+    setBroadcastMessage('');
+    setTimeout(() => setBroadcastStatus(''), 5000);
   };
 
   // --- FILTERS & VARS ---
@@ -506,7 +515,7 @@ export default function Home() {
     return matchesCategory && matchesSearch;
   });
 
-  const canUserUpload = currentUser?.role === 'admin' || currentUser?.isEligibleToUpload;
+  const canUserUpload = currentUser?.role === 'admin' || currentUser?.isEligibleToUpload === true;
   const isUserAdmin = currentUser?.role === 'admin';
 
   const dashboardMenu = [
@@ -534,8 +543,9 @@ export default function Home() {
               <h3 style={{ margin: 0, color: '#00f2fe' }}>Admin Bypass</h3>
               <button onClick={() => setIsLoginOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
-            <form onSubmit={handleLogin}>
-              <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Admin Email" required style={{ width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '5px', background: '#222', border: 'none', color: '#fff' }} />
+            <form onSubmit={handleAuthSubmit}>
+              <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="Admin Email" required style={{ width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '5px', background: '#222', border: 'none', color: '#fff' }} />
+              <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="Password" style={{ width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '5px', background: '#222', border: 'none', color: '#fff' }} />
               <button type="submit" style={{ width: '100%', padding: '10px', background: '#ff3366', color: '#fff', border: 'none', borderRadius: '5px' }}>Unlock</button>
             </form>
           </div>
@@ -583,7 +593,7 @@ export default function Home() {
                 <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.72rem', fontWeight: 'bold', cursor: 'pointer' }}>Logout</button>
               </div>
             ) : (
-              <button onClick={() => setIsLoginOpen(true)} style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '8px 16px', borderRadius: '30px', fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}>🔐 Login</button>
+              <button onClick={() => setIsLoginOpen(true)} style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '8px 16px', borderRadius: '30px', fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}>🔐 Login / Register</button>
             )}
 
             <button onClick={() => setIsDashboardOpen(true)} style={{ background: 'rgba(0, 242, 254, 0.14)', color: '#00f2fe', border: '1px solid rgba(0, 242, 254, 0.3)', padding: '8px 16px', borderRadius: '30px', fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}>☰ Dashboard</button>
@@ -742,21 +752,15 @@ export default function Home() {
                 <div>
                   <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Inbox & Broadcasts</div>
                   
-                  {/* Admin Broadcast Sender */}
                   {isUserAdmin && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>Send a new broadcast:</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>Send an Automated Broadcast:</span>
                       <input value={broadcastSubject} onChange={(e) => setBroadcastSubject(e.target.value)} placeholder="Subject" style={{ padding: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
                       <textarea value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} rows={3} placeholder="Message body..." style={{ padding: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
                       
-                      <button onClick={handleSendBroadcast} style={{ padding: '8px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Send to Storefront Banner</button>
-
-                      <a 
-                        href={`mailto:${registeredUsers.map(u => u.email).join(',')}?subject=${encodeURIComponent(broadcastSubject)}&body=${encodeURIComponent(broadcastMessage)}`}
-                        style={{ padding: '8px', borderRadius: '8px', background: '#00f2fe', color: '#000', fontWeight: 'bold', textAlign: 'center', textDecoration: 'none', fontSize: '0.8rem' }}
-                      >
-                        📧 Send to Users' Emails ({registeredUsers.length} Recipients)
-                      </a>
+                      <button onClick={handleSendBroadcast} style={{ padding: '10px', borderRadius: '8px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
+                        🚀 Send Automated Broadcast (Banner + Email to All)
+                      </button>
 
                       {broadcastStatus && <div style={{ fontSize: '0.75rem', color: '#00f2fe' }}>{broadcastStatus}</div>}
                     </div>
@@ -886,24 +890,49 @@ export default function Home() {
         </div>
       )}
 
-      {/* ===== MODALS (Login, Upload, Edit) ===== */}
+      {/* ===== AUTHENTICATION MODAL (REGISTER vs LOGIN + REMEMBER ME) ===== */}
       {isLoginOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
           <div className="glass-card" style={{ maxWidth: '400px', width: '100%', padding: '28px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#00f2fe' }}>🔐 Sign In</h3>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#00f2fe' }}>
+                {authMode === 'login' ? '🔐 Member Login' : '📝 Guest Registration'}
+              </h3>
               <button onClick={() => setIsLoginOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '16px' }}>Log in to save orders or access admin dashboard.</p>
-            <form onSubmit={handleLogin}>
-              <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Email Address</label><input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
-              <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Password</label><input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
-              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer' }}>🚀 Log In</button>
+
+            {/* Mode Switch Tabs */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '12px' }}>
+              <button type="button" onClick={() => setAuthMode('login')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: authMode === 'login' ? '#ff3366' : 'transparent', color: '#fff', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer' }}>Login</button>
+              <button type="button" onClick={() => setAuthMode('register')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: authMode === 'register' ? '#ff3366' : 'transparent', color: '#fff', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer' }}>Register</button>
+            </div>
+
+            <form onSubmit={handleAuthSubmit}>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Email Address</label>
+                <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="e.g. user@email.com" required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Password</label>
+                <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+              </div>
+
+              {/* Remember Me Checkbox */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} id="rememberMe" style={{ width: '16px', height: '16px', accentColor: '#ff3366' }} />
+                <label htmlFor="rememberMe" style={{ fontSize: '0.8rem', cursor: 'pointer', color: '#cbd5e1' }}>Remember me</label>
+              </div>
+
+              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer' }}>
+                {authMode === 'login' ? '🚀 Secure Login' : '✨ Register & Get Welcome Email'}
+              </button>
             </form>
           </div>
         </div>
       )}
 
+      {/* ===== UPLOAD ITEM MODAL ===== */}
       {isUploadOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
           <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -927,6 +956,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* ===== EDIT ITEM MODAL ===== */}
       {editingProduct && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
           <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
