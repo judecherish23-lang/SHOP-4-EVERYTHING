@@ -281,40 +281,52 @@ return () => {
     }
   };
 
-  // --- AUTHENTICATION: LOGIN, REGISTRATION & WELCOME EMAIL ---
+  // --- AUTHENTICATION: NATIVE SUPABASE AUTH & WELCOME EMAIL ---
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!authEmail) return;
+    if (!authEmail || !authPassword) {
+      alert('Please enter both email and password.');
+      return;
+    }
 
     const emailClean = authEmail.trim().toLowerCase();
     const isAdmin = adminEmails.includes(emailClean);
 
-    const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
-
     let loggedUser: User;
 
     if (authMode === 'register') {
-      if (existingUser) {
-        alert('An account with this email already exists. Please log in.');
-        setAuthMode('login');
-        return;
-      }
-
-      loggedUser = {
+      // 1. Native Supabase Auth Sign Up (Triggers Supabase Custom SMTP email confirmation)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: emailClean,
-        role: isAdmin ? 'admin' : 'buyer',
-        isEligibleToUpload: isAdmin
-      };
+        password: authPassword,
+      });
 
-      const { error } = await supabase.from('store_users').insert([loggedUser]);
-      if (error) {
-        alert('Registration error: ' + error.message);
+      if (authError) {
+        alert('Registration error: ' + authError.message);
         return;
       }
 
-      setRegisteredUsers(prev => [...prev, loggedUser]);
+      // 2. Check if user already exists in custom store_users table
+      const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
+
+      if (existingUser) {
+        loggedUser = existingUser as User;
+      } else {
+        loggedUser = {
+          email: emailClean,
+          role: isAdmin ? 'admin' : 'buyer',
+          isEligibleToUpload: isAdmin
+        };
+
+        const { error: insertError } = await supabase.from('store_users').insert([loggedUser]);
+        if (insertError) {
+          alert('Database profile error: ' + insertError.message);
+          return;
+        }
+        setRegisteredUsers(prev => [...prev, loggedUser]);
+      }
       
-      // Dispatch Real Welcome Email via Backend API
+      // 3. Dispatch Real Welcome Email via Backend API (Resend)
       try {
         await fetch('/api/send-email', {
           method: 'POST',
@@ -331,10 +343,27 @@ return () => {
         console.error("Welcome email failed to send.");
       }
       
-      alert(`🎉 Registration successful! A welcome email has been sent directly to ${emailClean}.`);
+      alert(`🎉 Registration successful! A verification and welcome email have been sent directly to ${emailClean}.`);
+      setAuthMode('login');
+      return;
+
     } else {
+      // 1. Native Supabase Auth Sign In
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: emailClean,
+        password: authPassword,
+      });
+
+      if (authError) {
+        alert('Login failed: ' + authError.message);
+        return;
+      }
+
+      // 2. Fetch user profile from custom store_users table
+      const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
+
       if (!existingUser && !isAdmin) {
-        alert('No account found with this email. Please register first.');
+        alert('No account profile found. Please register first.');
         setAuthMode('register');
         return;
       }
@@ -369,11 +398,30 @@ return () => {
     setAuthPassword('');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setCurrentUser(null);
     localStorage.removeItem('shop4everything_user');
     sessionStorage.removeItem('shop4everything_user');
     alert('Logged out successfully.');
+  };
+
+  // --- PASSWORD RESET HANDLER ---
+  const handlePasswordReset = async () => {
+    if (!authEmail) {
+      alert('Please enter your email address in the field above first.');
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail.trim().toLowerCase(), {
+      redirectTo: 'https://shop-4-everything.vercel.app',
+    });
+
+    if (error) {
+      alert('Error: ' + error.message);
+    } else {
+      alert('Password reset link sent! Check your email inbox.');
+    }
   };
 
   // --- SELLER / UPLOAD PRIVILEGE MANAGER (FIXED) ---
@@ -988,10 +1036,21 @@ return () => {
                 <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
               </div>
 
-              {/* Remember Me Checkbox */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} id="rememberMe" style={{ width: '16px', height: '16px', accentColor: '#ff3366' }} />
-                <label htmlFor="rememberMe" style={{ fontSize: '0.8rem', cursor: 'pointer', color: '#cbd5e1' }}>Remember me</label>
+              {/* Remember Me Checkbox & Forgot Password Link */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} id="rememberMe" style={{ width: '16px', height: '16px', accentColor: '#ff3366' }} />
+                  <label htmlFor="rememberMe" style={{ fontSize: '0.8rem', cursor: 'pointer', color: '#cbd5e1' }}>Remember me</label>
+                </div>
+
+                {authMode === 'login' && (
+                  <button 
+                    type="button" 
+                    onClick={handlePasswordReset} 
+                    style={{ background: 'none', border: 'none', color: '#00f2fe', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 'bold' }}>
+                    Forgot Password?
+                  </button>
+                )}
               </div>
 
               <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', fontSize: '0.9rem', cursor: 'pointer' }}>
