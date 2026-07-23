@@ -153,31 +153,56 @@ export default function Home() {
     fetchGlobalData();
 
     // Supabase Real-time Channel for Instant Auto-Refresh across all clients
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-        fetchGlobalData(); // Refreshes products/broadcasts instantly
+const channel = supabase
+  .channel('schema-db-changes')
+  .on('postgres_changes', { event: '*', schema: 'public' }, async (payload) => {
+    // 1. Immediately refresh all global data (products, broadcasts, users)
+    await fetchGlobalData();
 
-        // REAL-TIME SESSION HIJACK: Instantly update active user permissions if changed by Admin
-        if (payload.table === 'store_users' && payload.eventType === 'UPDATE') {
-          const storedLocal = localStorage.getItem('shop4everything_user');
-          const storedSession = sessionStorage.getItem('shop4everything_user');
-          const activeStoredUser = storedLocal ? JSON.parse(storedLocal) : (storedSession ? JSON.parse(storedSession) : null);
-          
-          if (activeStoredUser && activeStoredUser.email === payload.new.email) {
-            const updatedLiveUser = { ...activeStoredUser, role: payload.new.role, isEligibleToUpload: payload.new.isEligibleToUpload };
-            setCurrentUser(updatedLiveUser);
-            if (storedLocal) localStorage.setItem('shop4everything_user', JSON.stringify(updatedLiveUser));
-            if (storedSession) sessionStorage.setItem('shop4everything_user', JSON.stringify(updatedLiveUser));
+    // 2. If a user's role/privilege was updated, sync the current browser session instantly
+    if (payload.table === 'store_users' && payload.eventType === 'UPDATE') {
+      const updatedEmail = payload.new.email;
+
+      // Check both storage types to find the currently active session
+      const localUser = localStorage.getItem('shop4everything_user');
+      const sessionUser = sessionStorage.getItem('shop4everything_user');
+
+      // Determine which storage method is in use and update it
+      if (localUser) {
+        try {
+          const parsed = JSON.parse(localUser);
+          if (parsed.email === updatedEmail) {
+            const refreshedUser = {
+              ...parsed,
+              role: payload.new.role,
+              isEligibleToUpload: payload.new.isEligibleToUpload,
+            };
+            localStorage.setItem('shop4everything_user', JSON.stringify(refreshedUser));
+            setCurrentUser(refreshedUser);
           }
-        }
-      })
-      .subscribe();
+        } catch (e) {}
+      } else if (sessionUser) {
+        try {
+          const parsed = JSON.parse(sessionUser);
+          if (parsed.email === updatedEmail) {
+            const refreshedUser = {
+              ...parsed,
+              role: payload.new.role,
+              isEligibleToUpload: payload.new.isEligibleToUpload,
+            };
+            sessionStorage.setItem('shop4everything_user', JSON.stringify(refreshedUser));
+            setCurrentUser(refreshedUser);
+          }
+        } catch (e) {}
+      }
+    }
+  })
+  .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+return () => {
+  supabase.removeChannel(channel);
+};
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- LOCAL CACHE, PERSISTENCE & PWA ---
