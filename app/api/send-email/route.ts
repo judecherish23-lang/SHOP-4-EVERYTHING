@@ -39,13 +39,12 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    // Normalizing recipients (can be a single string or an array)
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Dispatch emails via Resend sandbox endpoint
     const emailPromises = recipients.map(recipient => 
       resend.emails.send({
-        from: `SHOP4EVERYTHING <onboarding@resend.dev>`,
+        // Updated sender email address as requested
+        from: `SHOP4EVERYTHING <judecherish23@gmail.com>`,
         to: [recipient],
         subject: subject || 'Store Update',
         html: htmlTemplate,

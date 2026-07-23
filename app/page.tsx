@@ -728,10 +728,27 @@ return () => {
         <section style={{ maxWidth: '1200px', margin: '20px auto 10px auto', padding: '0 20px' }}>
           <div style={{ border: '1px solid rgba(0,242,254,0.35)', background: 'linear-gradient(135deg, rgba(0,242,254,0.18), rgba(255,51,106,0.14))', borderRadius: '20px', padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#00f2fe', textTransform: 'uppercase' }}>Install app</div>
-              <div style={{ fontSize: '0.9rem', color: isDark ? '#f8fafc' : '#0f172a', marginTop: '4px' }}>Get the full {settings.storeName} experience natively on your device.</div>
+              <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#00f2fe', textTransform: 'uppercase' }}>
+                {deferredInstallPrompt ? 'Install App' : 'Save to Home Screen'}
+              </div>
+              <div style={{ fontSize: '0.9rem', color: isDark ? '#f8fafc' : '#0f172a', marginTop: '4px' }}>
+                {deferredInstallPrompt 
+                  ? `Get the full ${settings.storeName} experience natively on your device.` 
+                  : `Tap your browser menu (⋮ or ⇧) and select "Add to Home Screen" to save shortcut.`}
+              </div>
             </div>
-            <button onClick={handleInstallClick} style={{ background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '999px', padding: '10px 16px', fontWeight: '900', cursor: 'pointer' }}>Install Now</button>
+
+            {deferredInstallPrompt ? (
+              <button onClick={handleInstallClick} style={{ background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '999px', padding: '10px 16px', fontWeight: '900', cursor: 'pointer' }}>
+                Install Now
+              </button>
+            ) : (
+              <button onClick={() => {
+                alert('To save shortcut: Tap your browser share or menu icon, then select "Add to Home Screen".');
+              }} style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '999px', padding: '10px 16px', fontWeight: '900', cursor: 'pointer' }}>
+                How to Save Shortcut
+              </button>
+            )}
           </div>
         </section>
       )}
