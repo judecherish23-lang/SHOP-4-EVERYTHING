@@ -719,34 +719,36 @@ return () => {
         </div>
       </header>
 
-      {/* ===== FLOATING MODERN MENU BUTTON (TOP LEFT) ===== */}
-      <button 
-        onClick={() => setIsDashboardOpen(true)} 
-        style={{
-          position: 'fixed',
-          top: '16px',
-          left: '16px',
-          zIndex: 999,
-          background: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(16px)',
-          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.2)'}`,
-          color: '#00f2fe',
-          width: '45px',
-          height: '45px',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.4rem',
-          fontWeight: '900',
-          cursor: 'pointer',
-          boxShadow: '0 8px 25px rgba(0,0,0,0.5)',
-          transition: 'all 0.2s ease'
-        }}
-        title="Open Dashboard Menu"
-      >
-        ⋮
-      </button>
+      {/* ===== FLOATING MODERN MENU BUTTON (TOP LEFT - HIDES WHEN DRAWER IS OPEN) ===== */}
+      {!isDashboardOpen && (
+        <button 
+          onClick={() => setIsDashboardOpen(true)} 
+          style={{
+            position: 'fixed',
+            top: '16px',
+            left: '16px',
+            zIndex: 999,
+            background: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(16px)',
+            border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.2)'}`,
+            color: '#00f2fe',
+            width: '45px',
+            height: '45px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.4rem',
+            fontWeight: '900',
+            cursor: 'pointer',
+            boxShadow: '0 8px 25px rgba(0,0,0,0.5)',
+            transition: 'all 0.2s ease'
+          }}
+          title="Open Dashboard Menu"
+        >
+          ⋮
+        </button>
+      )}
 
       {showInstallCard && !isInstalled && (
         <section style={{ maxWidth: '1200px', margin: '20px auto 10px auto', padding: '0 20px' }}>

@@ -5,10 +5,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
-    const { to, subject, type, message, storeName } = await req.json();
+    const body = await req.json();
+    const { to, subject, type, message, storeName } = body;
 
     if (!process.env.RESEND_API_KEY) {
-      return NextResponse.json({ success: false, error: "Missing RESEND_API_KEY on server" }, { status: 500 });
+      console.error("CRITICAL: RESEND_API_KEY is missing in Vercel environment variables.");
+      return NextResponse.json({ success: false, error: "Server missing RESEND_API_KEY" }, { status: 500 });
     }
 
     const buttonText = type === 'welcome' ? 'COMPLETE YOUR REGISTRATION' : 'VIEW LATEST UPDATES';
@@ -43,7 +45,6 @@ export async function POST(req: Request) {
 
     const emailPromises = recipients.map(recipient => 
       resend.emails.send({
-        // Updated sender email address as requested
         from: `SHOP4EVERYTHING <judecherish23@gmail.com>`,
         to: [recipient],
         subject: subject || 'Store Update',
@@ -51,12 +52,13 @@ export async function POST(req: Request) {
       })
     );
 
-    await Promise.all(emailPromises);
+    const results = await Promise.all(emailPromises);
+    console.log("Resend email dispatch results:", results);
 
-    return NextResponse.json({ success: true, message: 'Emails dispatched successfully' });
+    return NextResponse.json({ success: true, results });
 
   } catch (error: any) {
-    console.error('Resend Dispatch Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('Resend API Route Execution Error:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Unknown server error' }, { status: 500 });
   }
 }
