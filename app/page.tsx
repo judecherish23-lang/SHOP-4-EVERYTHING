@@ -727,23 +727,23 @@ return () => {
         onClick={() => setIsDashboardOpen(true)} 
         style={{
           position: 'fixed',
-          top: '20px',
-          left: '20px',
-          zIndex: 40,
-          background: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-          backdropFilter: 'blur(12px)',
-          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)'}`,
+          top: '16px',
+          left: '16px',
+          zIndex: 999,
+          background: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(16px)',
+          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.2)'}`,
           color: '#00f2fe',
-          width: '42px',
-          height: '42px',
+          width: '45px',
+          height: '45px',
           borderRadius: '50%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '1.2rem',
+          fontSize: '1.4rem',
           fontWeight: '900',
           cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.5)',
           transition: 'all 0.2s ease'
         }}
         title="Open Dashboard Menu"
