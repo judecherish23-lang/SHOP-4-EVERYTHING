@@ -641,6 +641,7 @@ return () => {
     { id: 'shop', label: 'Shop Management', icon: '🛍️' },
     { id: 'orders', label: 'My Cart & Orders', icon: '📦' },
     { id: 'broadcast', label: 'Inbox & Broadcasts', icon: '📣' },
+    { id: 'account', label: currentUser ? 'Account & Logout' : 'Member Login', icon: currentUser ? '👤' : '🔐' },
     { id: 'founder', label: 'Contact Founder', icon: '👑' },
     ...(isUserAdmin ? [{ id: 'customers', label: 'User Roles', icon: '👥' }, { id: 'settings', label: 'Global Settings', icon: '⚙️' }] : [])
   ] as const;
@@ -676,49 +677,45 @@ return () => {
   return (
     <div style={{ minHeight: '100vh', background: isDark ? '#090d16' : '#f8fafc', color: isDark ? '#f8fafc' : '#0f172a', transition: 'all 0.3s' }}>
       
-      {/* ===== HEADER NAVIGATION ===== */}
+      {/* ===== HEADER NAVIGATION (CENTERED) ===== */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 50,
         background: isDark ? 'rgba(9, 13, 22, 0.88)' : 'rgba(248, 250, 252, 0.88)',
         backdropFilter: 'blur(20px)', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, padding: '12px 20px',
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Centered Logo & Title */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
             {settings.storeLogoUrl ? (
-              <img src={settings.storeLogoUrl} alt="Logo" style={{ width: '40px', height: '40px', borderRadius: '12px', objectFit: 'cover' }} />
+              <img src={settings.storeLogoUrl} alt="Logo" style={{ width: '42px', height: '42px', borderRadius: '12px', objectFit: 'cover' }} />
             ) : (
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '1.2rem', color: '#fff' }}>🛍️</div>
+              <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '1.2rem', color: '#fff' }}>🛍️</div>
             )}
             <div>
-              <h1 style={{ fontSize: '1.3rem', fontWeight: '900', margin: 0, background: 'linear-gradient(135deg, #ff3366, #00f2fe)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.5px' }}>{settings.storeName}</h1>
-              <span style={{ fontSize: '0.7rem', color: isDark ? '#94a3b8' : '#64748b' }}>{settings.storeTagline}</span>
+              <h1 style={{ fontSize: '1.35rem', fontWeight: '900', margin: 0, background: 'linear-gradient(135deg, #ff3366, #00f2fe)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.5px' }}>{settings.storeName}</h1>
+              <span style={{ fontSize: '0.72rem', color: isDark ? '#94a3b8' : '#64748b' }}>{settings.storeTagline}</span>
             </div>
           </div>
 
-          <div style={{ flex: 1, maxWidth: '300px', minWidth: '180px' }}>
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="🔍 Search products..." style={{ width: '100%', padding: '8px 16px', borderRadius: '30px', background: isDark ? 'rgba(0,0,0,0.4)' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`, color: isDark ? '#fff' : '#000', outline: 'none' }} />
+          {/* Search & Actions Bar */}
+          <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '180px', maxWidth: '400px' }}>
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="🔍 Search products..." style={{ width: '100%', padding: '8px 16px', borderRadius: '30px', background: isDark ? 'rgba(0,0,0,0.4)' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`, color: isDark ? '#fff' : '#000', outline: 'none' }} />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {canUserUpload && (
+                <button onClick={() => setIsUploadOpen(true)} style={{ background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', border: 'none', padding: '8px 14px', borderRadius: '30px', fontWeight: '900', fontSize: '0.78rem', cursor: 'pointer' }}>➕ Upload Item</button>
+              )}
+
+              <button onClick={() => setIsCartOpen(true)} style={{ background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '30px', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🛒 Cart</span>
+                <span style={{ background: '#fff', color: '#ff3366', borderRadius: '50%', padding: '2px 8px', fontSize: '0.78rem', fontWeight: '900' }}>{totalCartCount}</span>
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            {canUserUpload && (
-              <button onClick={() => setIsUploadOpen(true)} style={{ background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '30px', fontWeight: '900', fontSize: '0.78rem', cursor: 'pointer' }}>➕ Upload Item</button>
-            )}
-
-            {currentUser ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', padding: '4px 12px', borderRadius: '30px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: isUserAdmin ? '#ff3366' : '#00f2fe' }}>{isUserAdmin ? '👑 Admin' : '👤 User'}</span>
-                <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.72rem', fontWeight: 'bold', cursor: 'pointer' }}>Logout</button>
-              </div>
-            ) : (
-              <button onClick={() => setIsLoginOpen(true)} style={{ background: 'rgba(255,255,255,0.08)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '8px 16px', borderRadius: '30px', fontWeight: '800', fontSize: '0.78rem', cursor: 'pointer' }}>🔐 Login / Register</button>
-            )}
-            
-            <button onClick={() => setIsCartOpen(true)} style={{ background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '30px', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>🛒 Cart</span>
-              <span style={{ background: '#fff', color: '#ff3366', borderRadius: '50%', padding: '2px 8px', fontSize: '0.78rem', fontWeight: '900' }}>{totalCartCount}</span>
-            </button>
-          </div>
         </div>
       </header>
 
@@ -996,6 +993,27 @@ return () => {
                     <a href={`https://wa.me/${settings.primaryPhone}`} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>💬 Chat on WhatsApp</a>
                     {settings.socialInstagram && <a href={settings.socialInstagram} target="_blank" rel="noreferrer" style={{ background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)', color: '#fff', padding: '8px 12px', borderRadius: '20px', textDecoration: 'none', fontSize: '0.8rem', fontWeight: '800', textAlign: 'center' }}>📷 Instagram</a>}
                   </div>
+                </div>
+              )}
+
+              {dashboardSection === 'account' && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '10px' }}>Account & Security</div>
+                  {currentUser ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Logged in as:</div>
+                        <div style={{ fontWeight: '800', fontSize: '0.9rem', color: '#00f2fe' }}>{currentUser.email}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: isUserAdmin ? '#ff3366' : '#25d366', marginTop: '4px' }}>Role: {currentUser.role.toUpperCase()}</div>
+                      </div>
+                      <button onClick={() => { setIsDashboardOpen(false); handleLogout(); }} style={{ width: '100%', padding: '10px', borderRadius: '12px', background: '#ef4444', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer' }}>🚪 Logout from Account</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>You are not logged in. Access your member account or register below.</p>
+                      <button onClick={() => { setIsDashboardOpen(false); setIsLoginOpen(true); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer' }}>🔐 Open Login / Register</button>
+                    </div>
+                  )}
                 </div>
               )}
 
