@@ -20,6 +20,7 @@ interface CartItem {
   product: Product;
   quantity: number;
   selectedColorImage?: string;
+  selectedColorIndex?: number; // <-- Added to track image number (1, 2, 3...)
 }
 
 interface User {
@@ -555,8 +556,10 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
   };
 
   // --- CART ---
-  const addToCart = (product: Product, customImage?: string) => {
+  const addToCart = (product: Product, customImage?: string, colorIndex?: number) => {
     const targetImage = customImage || product.image;
+    const targetIndex = colorIndex !== undefined ? colorIndex : 1;
+    
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id && item.selectedColorImage === targetImage);
       if (existing) {
@@ -565,7 +568,7 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
           : item
         );
       }
-      return [...prev, { product, quantity: 1, selectedColorImage: targetImage }];
+      return [...prev, { product, quantity: 1, selectedColorImage: targetImage, selectedColorIndex: targetIndex }];
     });
     setIsCartOpen(true);
   };
@@ -583,8 +586,12 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
   const generateWhatsAppLink = (phoneNumber: string) => {
     if (cart.length === 0) return '#';
     let text = `🛍️ *NEW ORDER FROM ${settings.storeName}*\n------------------------------------\n`;
-    text += cart.map((item, index) => `${index + 1}. *${item.product.title}*\n   • Qty: ${item.quantity}\n   • Price: ${settings.currencySymbol}${(item.product.price * item.quantity).toLocaleString()}`).join('\n');
-    text += `\n------------------------------------\n🚚 Delivery Fee: ${settings.currencySymbol}${settings.deliveryFee.toLocaleString()}\n💰 *GRAND TOTAL: ${settings.currencySymbol}${grandTotal.toLocaleString()}*\n\nPlease confirm availability!`;
+    cart.forEach((item, index) => {
+      const colorLabel = item.selectedColorIndex ? ` [Color: Image ${item.selectedColorIndex}]` : '';
+      text += `${index + 1}. *${item.product.title}*${colorLabel}\n   • Qty: ${item.quantity}\n   • Price: ${settings.currencySymbol}${(item.product.price * item.quantity).toLocaleString()}\n`;
+    });
+    const deliveryText = settings.deliveryFee > 0 ? `${settings.currencySymbol}${settings.deliveryFee.toLocaleString()}` : 'Talk to Seller';
+    text += `------------------------------------\n🚚 Delivery Fee: ${deliveryText}\n💰 *GRAND TOTAL: ${settings.currencySymbol}${grandTotal.toLocaleString()}*\n\nPlease confirm availability!`;
     return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(text)}`;
   };
 
@@ -1135,7 +1142,7 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
 
             <div style={{ padding: '20px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, background: isDark ? 'rgba(0,0,0,0.3)' : '#f8fafc' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}><span style={{ color: isDark ? '#94a3b8' : '#64748b' }}>Items Subtotal:</span><span style={{ fontWeight: '800' }}>{settings.currencySymbol}{cartSubtotal.toLocaleString()}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.9rem' }}><span style={{ color: isDark ? '#94a3b8' : '#64748b' }}>Delivery Fee:</span><span style={{ fontWeight: '800' }}>{settings.currencySymbol}{settings.deliveryFee.toLocaleString()}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.9rem' }}><span style={{ color: isDark ? '#94a3b8' : '#64748b' }}>Delivery Fee:</span><span style={{ fontWeight: '800' }}>{settings.deliveryFee > 0 ? `${settings.currencySymbol}${settings.deliveryFee.toLocaleString()}` : 'Talk to Seller'}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '1.2rem', fontWeight: '900' }}><span>Grand Total:</span><span style={{ color: '#ff3366' }}>{settings.currencySymbol}{grandTotal.toLocaleString()}</span></div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1319,8 +1326,10 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
               <button 
                 onClick={() => {
                   const targetProduct = products.find(p => p.images === viewingProductImages || p.image === viewingProductImages[0]);
-                  if (targetProduct) {
-                    addToCart(targetProduct, selectedVariantImage || viewingProductImages[0]);
+                  if (targetProduct && viewingProductImages) {
+                    const selectedIdx = viewingProductImages.findIndex(img => img === selectedVariantImage);
+                    const colorIndexNumber = selectedIdx !== -1 ? selectedIdx + 1 : 1;
+                    addToCart(targetProduct, selectedVariantImage || viewingProductImages[0], colorIndexNumber);
                   }
                   setViewingProductImages(null);
                   setSelectedVariantImage(null);
