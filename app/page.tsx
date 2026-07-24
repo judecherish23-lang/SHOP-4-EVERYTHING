@@ -10,6 +10,7 @@ interface Product {
   price: number;
   originalPrice?: number | null;
   image: string;
+  images?: string[]; // <-- Upgraded to support multiple color variant images
   tag: string;
   description: string;
   addedBy?: string | null;
@@ -105,16 +106,17 @@ export default function Home() {
   const [authPassword, setAuthPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Modals for Upload / Edit
+  // Modals for Upload / Edit & Multi-Image Color Variant Viewer
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [viewingProductImages, setViewingProductImages] = useState<string[] | null>(null);
 
   // Founder Info (Static for now)
   const authorName = 'Darlingtina Jude';
   const authorBio = 'Welcome to SHOP4EVERYTHING! We bring you top-tier fashion wares, luxury shoes, handcrafted bags, household items, garden decor, and appliances delivered right to your doorstep.';
   const authorImage = '/darlingtina.jpg';
 
-  // Forms
+  // Forms & Multi-Image State Arrays
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('Fashion & Clothings');
   const [newPrice, setNewPrice] = useState('');
@@ -122,6 +124,7 @@ export default function Home() {
   const [newTag, setNewTag] = useState('🟢 In Stock');
   const [newDesc, setNewDesc] = useState('');
   const [newImageFile, setNewImageFile] = useState<string>('');
+  const [newImagesList, setNewImagesList] = useState<string[]>([]);
 
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('Fashion & Clothings');
@@ -130,22 +133,23 @@ export default function Home() {
   const [editTag, setEditTag] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editImageFile, setEditImageFile] = useState<string>('');
+  const [editImagesList, setEditImagesList] = useState<string[]>([]);
 
   // --- CLOUD FETCHING & REAL-TIME AUTO-REFRESH SUBSCRIPTIONS ---
   useEffect(() => {
     const fetchGlobalData = async () => {
       const { data: prodData } = await supabase.from('products').select('*').order('id', { ascending: false });
       if (prodData) setProducts(prodData as Product[]);
-  
+ 
       const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
       if (setData) setSettings(setData as StoreSettings);
-  
+ 
       const { data: bcData } = await supabase.from('broadcasts').select('*').order('created_at', { ascending: false });
       if (bcData && bcData.length > 0) {
         setBroadcasts(bcData as BroadcastEntry[]);
         setActiveBroadcast(bcData[0] as BroadcastEntry);
       }
-  
+ 
       const { data: usrData } = await supabase.from('store_users').select('*');
       if (usrData) setRegisteredUsers(usrData as User[]);
     };
@@ -153,56 +157,51 @@ export default function Home() {
     fetchGlobalData();
 
     // Supabase Real-time Channel for Instant Auto-Refresh across all clients
-const channel = supabase
-  .channel('schema-db-changes')
-  .on('postgres_changes', { event: '*', schema: 'public' }, async (payload) => {
-    // 1. Immediately refresh all global data (products, broadcasts, users)
-    await fetchGlobalData();
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, async (payload) => {
+        await fetchGlobalData();
 
-    // 2. If a user's role/privilege was updated, sync the current browser session instantly
-    if (payload.table === 'store_users' && payload.eventType === 'UPDATE') {
-      const updatedEmail = payload.new.email;
+        if (payload.table === 'store_users' && payload.eventType === 'UPDATE') {
+          const updatedEmail = payload.new.email;
+          const localUser = localStorage.getItem('shop4everything_user');
+          const sessionUser = sessionStorage.getItem('shop4everything_user');
 
-      // Check both storage types to find the currently active session
-      const localUser = localStorage.getItem('shop4everything_user');
-      const sessionUser = sessionStorage.getItem('shop4everything_user');
-
-      // Determine which storage method is in use and update it
-      if (localUser) {
-        try {
-          const parsed = JSON.parse(localUser);
-          if (parsed.email === updatedEmail) {
-            const refreshedUser = {
-              ...parsed,
-              role: payload.new.role,
-              isEligibleToUpload: payload.new.isEligibleToUpload,
-            };
-            localStorage.setItem('shop4everything_user', JSON.stringify(refreshedUser));
-            setCurrentUser(refreshedUser);
+          if (localUser) {
+            try {
+              const parsed = JSON.parse(localUser);
+              if (parsed.email === updatedEmail) {
+                const refreshedUser = {
+                  ...parsed,
+                  role: payload.new.role,
+                  isEligibleToUpload: payload.new.isEligibleToUpload,
+                };
+                localStorage.setItem('shop4everything_user', JSON.stringify(refreshedUser));
+                setCurrentUser(refreshedUser);
+              }
+            } catch (e) {}
+          } else if (sessionUser) {
+            try {
+              const parsed = JSON.parse(sessionUser);
+              if (parsed.email === updatedEmail) {
+                const refreshedUser = {
+                  ...parsed,
+                  role: payload.new.role,
+                  isEligibleToUpload: payload.new.isEligibleToUpload,
+                };
+                sessionStorage.setItem('shop4everything_user', JSON.stringify(refreshedUser));
+                setCurrentUser(refreshedUser);
+              }
+            } catch (e) {}
           }
-        } catch (e) {}
-      } else if (sessionUser) {
-        try {
-          const parsed = JSON.parse(sessionUser);
-          if (parsed.email === updatedEmail) {
-            const refreshedUser = {
-              ...parsed,
-              role: payload.new.role,
-              isEligibleToUpload: payload.new.isEligibleToUpload,
-            };
-            sessionStorage.setItem('shop4everything_user', JSON.stringify(refreshedUser));
-            setCurrentUser(refreshedUser);
-          }
-        } catch (e) {}
-      }
-    }
-  })
-  .subscribe();
+        }
+      })
+      .subscribe();
 
-return () => {
-  supabase.removeChannel(channel);
-};
-// eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- LOCAL CACHE, PERSISTENCE & PWA ---
@@ -212,13 +211,11 @@ return () => {
       try { setCart(JSON.parse(savedCart)); } catch (e) {}
     }
 
-    // Check remember me storage (both local and session)
     const rememberedUser = localStorage.getItem('shop4everything_user') || sessionStorage.getItem('shop4everything_user');
     if (rememberedUser) {
       try { setCurrentUser(JSON.parse(rememberedUser)); } catch (e) {}
     }
 
-    // PWA True Standalone Check
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
                          Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
                          
@@ -295,7 +292,6 @@ return () => {
     let loggedUser: User;
 
     if (authMode === 'register') {
-      // 1. Native Supabase Auth Sign Up (Triggers Supabase Custom SMTP email confirmation)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: emailClean,
         password: authPassword,
@@ -306,7 +302,6 @@ return () => {
         return;
       }
 
-      // 2. Check if user already exists in custom store_users table
       const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
 
       if (existingUser) {
@@ -326,7 +321,6 @@ return () => {
         setRegisteredUsers(prev => [...prev, loggedUser]);
       }
       
-      // 3. Dispatch Real Welcome Email via Backend API (Resend)
       try {
         await fetch('/api/send-email', {
           method: 'POST',
@@ -348,7 +342,6 @@ return () => {
       return;
 
     } else {
-      // 1. Native Supabase Auth Sign In
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: emailClean,
         password: authPassword,
@@ -359,7 +352,6 @@ return () => {
         return;
       }
 
-      // 2. Fetch user profile from custom store_users table
       const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
 
       if (!existingUser && !isAdmin) {
@@ -374,7 +366,6 @@ return () => {
         isEligibleToUpload: isAdmin
       };
 
-      // Ensure admins always get their rights back if needed
       if (isAdmin && loggedUser.role !== 'admin') {
         loggedUser.role = 'admin';
         loggedUser.isEligibleToUpload = true;
@@ -386,7 +377,6 @@ return () => {
 
     setCurrentUser(loggedUser);
     
-    // Remember Me persistence handler
     if (rememberMe) {
       localStorage.setItem('shop4everything_user', JSON.stringify(loggedUser));
     } else {
@@ -424,7 +414,7 @@ return () => {
     }
   };
 
-  // --- SELLER / UPLOAD PRIVILEGE MANAGER (FIXED) ---
+  // --- SELLER / UPLOAD PRIVILEGE MANAGER ---
   const toggleUserEligibility = async (email: string, currentStatus: boolean) => {
     if (!currentUser || currentUser.role !== 'admin') return;
     
@@ -439,7 +429,6 @@ return () => {
     if (!error) {
       setRegisteredUsers(prev => prev.map(u => u.email === email ? { ...u, isEligibleToUpload: newStatus, role: newRole } : u));
       
-      // Instantly update active state if user is logged into this browser session
       if (currentUser.email === email) {
         const updatedUser = { ...currentUser, isEligibleToUpload: newStatus, role: newRole };
         setCurrentUser(updatedUser);
@@ -451,7 +440,7 @@ return () => {
     }
   };
 
-  // --- PRODUCT MANAGEMENT ---
+  // --- MULTI-IMAGE & FILE HANDLERS ---
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>, setTargetImage: (val: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -461,6 +450,27 @@ return () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleMultipleFilesChange = (e: ChangeEvent<HTMLInputElement>, setTargetImages: React.Dispatch<React.SetStateAction<string[]>>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const readers: Promise<string>[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      readers.push(
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        })
+      );
+    }
+
+    Promise.all(readers).then((base64Images) => {
+      setTargetImages(prev => [...prev, ...base64Images]);
+    });
   };
 
   const handleAddNewProduct = async (e: React.FormEvent) => {
@@ -477,7 +487,8 @@ return () => {
       category: newCategory,
       price: parsedPrice,
       originalPrice: parsedOriginalPrice > 0 ? parsedOriginalPrice : null,
-      image: newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
+      image: newImagesList[0] || newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
+      images: newImagesList.length > 0 ? newImagesList : (newImageFile ? [newImageFile] : []),
       tag: newTag || '🟢 In Stock',
       description: newDesc.trim() || 'High quality item.',
       addedBy: currentUser?.email || null
@@ -488,7 +499,7 @@ return () => {
 
     if (data) setProducts(prev => [data[0] as Product, ...prev]);
 
-    setNewTitle(''); setNewPrice(''); setNewOriginalPrice(''); setNewImageFile(''); setNewDesc('');
+    setNewTitle(''); setNewPrice(''); setNewOriginalPrice(''); setNewImageFile(''); setNewImagesList([]); setNewDesc('');
     setIsUploadOpen(false);
     alert('✅ Item uploaded!');
   };
@@ -498,6 +509,7 @@ return () => {
     setEditTitle(product.title); setEditCategory(product.category);
     setEditPrice(product.price.toString()); setEditOriginalPrice(product.originalPrice ? product.originalPrice.toString() : '');
     setEditTag(product.tag); setEditDesc(product.description); setEditImageFile(product.image);
+    setEditImagesList(product.images || [product.image]);
   };
 
   const handleSaveEditProduct = async (e: React.FormEvent) => {
@@ -511,7 +523,8 @@ return () => {
       originalPrice: parseFloat(editOriginalPrice) || null,
       tag: editTag,
       description: editDesc,
-      image: editImageFile || editingProduct.image
+      image: editImagesList[0] || editImageFile || editingProduct.image,
+      images: editImagesList.length > 0 ? editImagesList : [editImageFile || editingProduct.image]
     };
 
     const { error } = await supabase.from('products').update(updatedItem).eq('id', editingProduct.id);
@@ -555,10 +568,8 @@ return () => {
   const generateWhatsAppLink = (phoneNumber: string) => {
     if (cart.length === 0) return '#';
     let text = `🛍️ *NEW ORDER FROM ${settings.storeName}*\n------------------------------------\n`;
-    cart.forEach((item, index) => {
-      text += `${index + 1}. *${item.product.title}*\n   • Qty: ${item.quantity}\n   • Price: ${settings.currencySymbol}${(item.product.price * item.quantity).toLocaleString()}\n`;
-    });
-    text += `------------------------------------\n🚚 Delivery Fee: ${settings.currencySymbol}${settings.deliveryFee.toLocaleString()}\n💰 *GRAND TOTAL: ${settings.currencySymbol}${grandTotal.toLocaleString()}*\n\nPlease confirm availability!`;
+    text += cart.map((item, index) => `${index + 1}. *${item.product.title}*\n   • Qty: ${item.quantity}\n   • Price: ${settings.currencySymbol}${(item.product.price * item.quantity).toLocaleString()}`).join('\n');
+    text += `\n------------------------------------\n🚚 Delivery Fee: ${settings.currencySymbol}${settings.deliveryFee.toLocaleString()}\n💰 *GRAND TOTAL: ${settings.currencySymbol}${grandTotal.toLocaleString()}*\n\nPlease confirm availability!`;
     return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(text)}`;
   };
 
@@ -586,7 +597,6 @@ return () => {
       sentBy: currentUser?.email || 'admin'
     };
 
-    // 1. Push to Supabase (instantly updates UI via Real-Time WebSockets)
     const { data, error } = await supabase.from('broadcasts').insert([entry]).select();
     if (error) {
       alert('Broadcast error: ' + error.message);
@@ -598,7 +608,6 @@ return () => {
       setActiveBroadcast(data[0] as BroadcastEntry);
     }
 
-    // 2. Trigger Real Backend Email Dispatcher
     const allEmails = registeredUsers.map(u => u.email);
     setBroadcastStatus('Sending secure emails to all users...');
     
@@ -827,6 +836,37 @@ return () => {
                 <div style={{ position: 'relative', height: '220px', width: '100%', overflow: 'hidden', background: '#000' }}>
                   <img src={product.image} alt={product.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   <span style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', color: '#fff', padding: '4px 10px', borderRadius: '14px', fontSize: '0.72rem', fontWeight: '800' }}>{product.tag}</span>
+
+                  {/* Multi-Image Color Variant Indicator (...) */}
+                  {product.images && product.images.length > 1 && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingProductImages(product.images || [product.image]);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        bottom: '10px',
+                        right: '10px',
+                        background: 'rgba(0, 0, 0, 0.8)',
+                        backdropFilter: 'blur(8px)',
+                        color: '#00f2fe',
+                        border: '1px solid rgba(0, 242, 254, 0.4)',
+                        padding: '4px 10px',
+                        borderRadius: '20px',
+                        fontSize: '0.8rem',
+                        fontWeight: '900',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        zIndex: 5
+                      }}
+                      title="View all color variants"
+                    >
+                      <span>•••</span> <span style={{ fontSize: '0.7rem', color: '#fff' }}>{product.images.length} colors</span>
+                    </button>
+                  )}
                 </div>
                 <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
                   <div>
@@ -928,37 +968,37 @@ return () => {
                   )}
 
                   {/* Broadcast Feed */}
-<div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-  {broadcasts.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>No messages yet.</p> : 
-    broadcasts.map(b => (
-      <div key={b.id} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', borderLeft: '3px solid #ff3366', position: 'relative' }}>
-        
-        {/* Admin Delete Button */}
-        {isUserAdmin && (
-          <button 
-            onClick={async () => {
-              if (confirm('Are you sure you want to delete this broadcast?')) {
-                const { error } = await supabase.from('broadcasts').delete().eq('id', b.id);
-                if (!error) {
-                  setBroadcasts(prev => prev.filter(item => item.id !== b.id));
-                  if (activeBroadcast?.id === b.id) setActiveBroadcast(null);
-                } else {
-                  alert('Error deleting broadcast: ' + error.message);
-                }
-              }
-            }} 
-            style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 'bold', cursor: 'pointer' }}>
-            🗑️ Delete
-          </button>
-        )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {broadcasts.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>No messages yet.</p> : 
+                      broadcasts.map(b => (
+                        <div key={b.id} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', borderLeft: '3px solid #ff3366', position: 'relative' }}>
+                          
+                          {/* Admin Delete Button */}
+                          {isUserAdmin && (
+                            <button 
+                              onClick={async () => {
+                                if (confirm('Are you sure you want to delete this broadcast?')) {
+                                  const { error } = await supabase.from('broadcasts').delete().eq('id', b.id);
+                                  if (!error) {
+                                    setBroadcasts(prev => prev.filter(item => item.id !== b.id));
+                                    if (activeBroadcast?.id === b.id) setActiveBroadcast(null);
+                                  } else {
+                                    alert('Error deleting broadcast: ' + error.message);
+                                  }
+                                }
+                              }} 
+                              style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                              🗑️ Delete
+                            </button>
+                          )}
 
-        <div style={{ fontWeight: '800', fontSize: '0.9rem', paddingRight: isUserAdmin ? '50px' : '0' }}>{b.subject}</div>
-        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>{b.message}</div>
-        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '8px', textAlign: 'right' }}>Sent by {b.sentBy} on {new Date(b.created_at).toLocaleDateString()}</div>
-      </div>
-    ))
-  }
-</div>
+                          <div style={{ fontWeight: '800', fontSize: '0.9rem', paddingRight: isUserAdmin ? '50px' : '0' }}>{b.subject}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>{b.message}</div>
+                          <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '8px', textAlign: 'right' }}>Sent by {b.sentBy} on {new Date(b.created_at).toLocaleDateString()}</div>
+                        </div>
+                      ))
+                    }
+                  </div>
                 </div>
               )}
 
@@ -1145,7 +1185,7 @@ return () => {
         </div>
       )}
 
-      {/* ===== UPLOAD ITEM MODAL ===== */}
+      {/* ===== UPLOAD ITEM MODAL (MULTI-IMAGE / COLOR VARIANTS) ===== */}
       {isUploadOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
           <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -1160,7 +1200,20 @@ return () => {
                 <div style={{ flex: 1 }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Actual Price</label><input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
                 <div style={{ flex: 1 }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Fake Price (Optional)</label><input type="number" value={newOriginalPrice} onChange={(e) => setNewOriginalPrice(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               </div>
-              <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>📷 Upload Image</label><input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setNewImageFile)} style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #00f2fe', color: '#fff' }} />{newImageFile && <img src={newImageFile} alt="Preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '12px', marginTop: '10px' }} />}</div>
+              
+              {/* Multi-Image File Selection */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>📷 Upload Color Variant Images (Select multiple)</label>
+                <input type="file" accept="image/*" multiple onChange={(e) => handleMultipleFilesChange(e, setNewImagesList)} style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #00f2fe', color: '#fff' }} />
+                {newImagesList.length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '10px', paddingBottom: '4px' }}>
+                    {newImagesList.map((img, idx) => (
+                      <img key={idx} src={img} alt="Preview" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, border: '1px solid #00f2fe' }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginBottom: '12px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Tag</label><input type="text" value={newTag} onChange={(e) => setNewTag(e.target.value)} placeholder="🟢 In Stock" style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               <div style={{ marginBottom: '18px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Description</label><textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}>🚀 Publish Product</button>
@@ -1169,7 +1222,7 @@ return () => {
         </div>
       )}
 
-      {/* ===== EDIT ITEM MODAL ===== */}
+      {/* ===== EDIT ITEM MODAL (MULTI-IMAGE / COLOR VARIANTS) ===== */}
       {editingProduct && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
           <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -1184,7 +1237,20 @@ return () => {
                 <div style={{ flex: 1 }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Actual Price</label><input type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
                 <div style={{ flex: 1 }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Fake Price</label><input type="number" value={editOriginalPrice} onChange={(e) => setEditOriginalPrice(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               </div>
-              <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>📷 Change Image</label><input type="file" accept="image/*" onChange={(e) => handleFileChange(e, setEditImageFile)} style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #ff3366', color: '#fff' }} />{editImageFile && <img src={editImageFile} alt="Preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '12px', marginTop: '10px' }} />}</div>
+              
+              {/* Multi-Image Edit Selection */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>📷 Update Color Variant Images</label>
+                <input type="file" accept="image/*" multiple onChange={(e) => handleMultipleFilesChange(e, setEditImagesList)} style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #ff3366', color: '#fff' }} />
+                {editImagesList.length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '10px', paddingBottom: '4px' }}>
+                    {editImagesList.map((img, idx) => (
+                      <img key={idx} src={img} alt="Preview" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, border: '1px solid #ff3366' }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginBottom: '12px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Tag</label><input type="text" value={editTag} onChange={(e) => setEditTag(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               <div style={{ marginBottom: '18px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Description</label><textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}>💾 Save Changes</button>
@@ -1193,6 +1259,29 @@ return () => {
         </div>
       )}
 
+      {/* ===== MULTI-IMAGE COLOR VARIANTS MINI VIEWER MODAL ===== */}
+      {viewingProductImages && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }} onClick={() => setViewingProductImages(null)}>
+          <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff', maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#00f2fe', textTransform: 'uppercase' }}>Color Variants</span>
+                <h3 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: '900' }}>Available Item Colors</h3>
+              </div>
+              <button onClick={() => setViewingProductImages(null)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              {viewingProductImages.map((imgUrl, idx) => (
+                <div key={idx} style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#000', height: '180px' }}>
+                  <img src={imgUrl} alt={`Variant ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setViewingProductImages(null)} style={{ width: '100%', marginTop: '20px', padding: '10px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}>Close Viewer</button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
-}
