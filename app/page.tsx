@@ -19,6 +19,7 @@ interface Product {
 interface CartItem {
   product: Product;
   quantity: number;
+  selectedColorImage?: string;
 }
 
 interface User {
@@ -110,6 +111,8 @@ export default function Home() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProductImages, setViewingProductImages] = useState<string[] | null>(null);
+
+const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(null);
 
   // Founder Info (Static for now)
   const authorName = 'Darlingtina Jude';
@@ -552,11 +555,17 @@ export default function Home() {
   };
 
   // --- CART ---
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, customImage?: string) => {
+    const targetImage = customImage || product.image;
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
-      if (existing) return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...prev, { product, quantity: 1 }];
+      const existing = prev.find(item => item.product.id === product.id && item.selectedColorImage === targetImage);
+      if (existing) {
+        return prev.map(item => (item.product.id === product.id && item.selectedColorImage === targetImage) 
+          ? { ...item, quantity: item.quantity + 1 } 
+          : item
+        );
+      }
+      return [...prev, { product, quantity: 1, selectedColorImage: targetImage }];
     });
     setIsCartOpen(true);
   };
@@ -1105,7 +1114,7 @@ export default function Home() {
               ) : (
                 cart.map(item => (
                   <div key={item.product.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', padding: '12px', borderRadius: '16px', border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
-                    <img src={item.product.image} alt={item.product.title} style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '12px' }} />
+                    <img src={item.selectedColorImage || item.product.image} alt={item.product.title} style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(255,51,106,0.3)' }} />
                     <div style={{ flex: 1 }}>
                       <h4 style={{ margin: '0 0 4px 0', fontSize: '0.88rem', fontWeight: '800' }}>{item.product.title}</h4>
                       <div style={{ fontSize: '0.85rem', color: '#ff3366', fontWeight: '900' }}>{settings.currencySymbol}{item.product.price.toLocaleString()}</div>
@@ -1228,7 +1237,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ===== EDIT ITEM MODAL (MULTI-IMAGE / COLOR VARIANTS) ===== */}
+     {/* ===== EDIT ITEM MODAL (MULTI-IMAGE / COLOR VARIANTS) ===== */}
       {editingProduct && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
           <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -1265,30 +1274,67 @@ export default function Home() {
         </div>
       )}
 
-      {/* ===== MULTI-IMAGE COLOR VARIANTS MINI VIEWER MODAL ===== */}
+      {/* ===== MULTI-IMAGE COLOR VARIANTS MINI VIEWER & SELECTOR MODAL ===== */}
       {viewingProductImages && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }} onClick={() => setViewingProductImages(null)}>
           <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff', maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#00f2fe', textTransform: 'uppercase' }}>Color Variants</span>
-                <h3 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: '900' }}>Available Item Colors</h3>
+                <h3 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: '900' }}>Select Desired Color</h3>
               </div>
               <button onClick={() => setViewingProductImages(null)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
 
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '14px' }}>Tap a color variant below to select it, then add it directly to your cart.</p>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-              {viewingProductImages.map((imgUrl, idx) => (
-                <div key={idx} style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#000', height: '180px' }}>
-                  <img src={imgUrl} alt={`Variant ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-              ))}
+              {viewingProductImages.map((imgUrl, idx) => {
+                const isSelected = selectedVariantImage === imgUrl || (!selectedVariantImage && idx === 0);
+                return (
+                  <div 
+                    key={idx} 
+                    onClick={() => setSelectedVariantImage(imgUrl)}
+                    style={{ 
+                      borderRadius: '14px', 
+                      overflow: 'hidden', 
+                      border: isSelected ? '3px solid #ff3366' : '1px solid rgba(255,255,255,0.1)', 
+                      background: '#000', 
+                      height: '180px', 
+                      cursor: 'pointer',
+                      position: 'relative',
+                      boxShadow: isSelected ? '0 0 15px rgba(255,51,106,0.5)' : 'none'
+                    }}
+                  >
+                    <img src={imgUrl} alt={`Variant ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {isSelected && (
+                      <span style={{ position: 'absolute', top: '8px', right: '8px', background: '#ff3366', color: '#fff', fontSize: '0.7rem', fontWeight: '900', padding: '2px 8px', borderRadius: '10px' }}>Selected ✓</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <button onClick={() => setViewingProductImages(null)} style={{ width: '100%', marginTop: '20px', padding: '10px', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}>Close Viewer</button>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button 
+                onClick={() => {
+                  const targetProduct = products.find(p => p.images === viewingProductImages || p.image === viewingProductImages[0]);
+                  if (targetProduct) {
+                    addToCart(targetProduct, selectedVariantImage || viewingProductImages[0]);
+                  }
+                  setViewingProductImages(null);
+                  setSelectedVariantImage(null);
+                }} 
+                style={{ flex: 1, padding: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}
+              >
+                🛒 Add Selected Color to Cart
+              </button>
+              <button onClick={() => { setViewingProductImages(null); setSelectedVariantImage(null); }} style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.1)', color: isDark ? '#fff' : '#000', border: 'none', borderRadius: '30px', fontWeight: '800', cursor: 'pointer' }}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
     </div>
   );
-  }
+}
