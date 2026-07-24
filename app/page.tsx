@@ -482,13 +482,16 @@ export default function Home() {
       alert('Please enter a valid title and price.'); return;
     }
 
+    const primaryImg = newImagesList[0] || newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
+    const allImages = newImagesList.length > 0 ? newImagesList : [primaryImg];
+
     const newItem = {
       title: newTitle.trim(),
       category: newCategory,
       price: parsedPrice,
       originalPrice: parsedOriginalPrice > 0 ? parsedOriginalPrice : null,
-      image: newImagesList[0] || newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
-      images: newImagesList.length > 0 ? newImagesList : (newImageFile ? [newImageFile] : []),
+      image: primaryImg,
+      images: allImages,
       tag: newTag || '🟢 In Stock',
       description: newDesc.trim() || 'High quality item.',
       addedBy: currentUser?.email || null
@@ -512,9 +515,12 @@ export default function Home() {
     setEditImagesList(product.images || [product.image]);
   };
 
-  const handleSaveEditProduct = async (e: React.FormEvent) => {
+ const handleSaveEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
+
+    const primaryImg = editImagesList[0] || editImageFile || editingProduct.image;
+    const allImages = editImagesList.length > 0 ? editImagesList : [primaryImg];
 
     const updatedItem = {
       title: editTitle,
@@ -523,8 +529,8 @@ export default function Home() {
       originalPrice: parseFloat(editOriginalPrice) || null,
       tag: editTag,
       description: editDesc,
-      image: editImagesList[0] || editImageFile || editingProduct.image,
-      images: editImagesList.length > 0 ? editImagesList : [editImageFile || editingProduct.image]
+      image: primaryImg,
+      images: allImages
     };
 
     const { error } = await supabase.from('products').update(updatedItem).eq('id', editingProduct.id);
@@ -533,7 +539,7 @@ export default function Home() {
     setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...updatedItem, originalPrice: updatedItem.originalPrice || undefined } : p));
     setEditingProduct(null);
     alert('✨ Item updated globally!');
-  };
+  }; 
 
   const handleDeleteProduct = async (productId: number) => {
     if (confirm('Are you sure you want to completely delete this item?')) {
