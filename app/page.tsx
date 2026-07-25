@@ -1361,7 +1361,7 @@ const compressExistingProductsInSupabase = async () => {
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                   <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Applies instantly to all new uploads & saves preference.</span>
-                  {currentUser?.email === settings.adminEmail && (
+                 {currentUser && adminEmails.includes(currentUser.email) && (
                     <button 
                       type="button" 
                       onClick={compressExistingProductsInSupabase}
