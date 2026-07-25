@@ -492,17 +492,6 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
   };
 
   // --- MULTI-IMAGE & FILE HANDLERS ---
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>, setTargetImage: (val: string) => void) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setTargetImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleMultipleFilesChange = async (e: ChangeEvent<HTMLInputElement>, setTargetImages: React.Dispatch<React.SetStateAction<string[]>>) => {
     const files = e.target.files;
     if (!files) return;
