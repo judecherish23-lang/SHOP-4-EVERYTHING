@@ -40,77 +40,6 @@ const compressImageFile = (file: File, quality: number = 0.7, maxWidth: number =
   });
 };
 
-// --- COMPRESS ALL EXISTING PRODUCTS IN DATABASE ---
-const compressExistingProductsInSupabase = async () => {
-  if (!confirm(`Are you sure you want to re-compress all existing products using the current ${Math.round(compressionQuality * 100)}% quality setting? This will optimize load speeds.`)) return;
-
-  const { data: allProds, error: fetchErr } = await supabase.from('products').select('*');
-  if (fetchErr || !allProds) {
-    alert('Error fetching products for compression: ' + (fetchErr?.message || 'Unknown error'));
-    return;
-  }
-
-  let updatedCount = 0;
-  for (const prod of allProds) {
-    let modified = false;
-    let newMainImage = prod.image;
-    let newImagesList = prod.images ? [...prod.images] : [];
-
-    // Helper to compress a base64 or URL image
-    const recompressUrl = async (url: string): Promise<string> => {
-      if (!url || !url.startsWith('data:image')) return url; // Skip external unsplash URLs if any
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.src = url;
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let w = img.width;
-          let h = img.height;
-          const maxW = 1000;
-          if (w > maxW) {
-            h = Math.round((h * maxW) / w);
-            w = maxW;
-          }
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) { resolve(url); return; }
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/jpeg', compressionQuality));
-        };
-        img.onerror = () => resolve(url);
-      });
-    };
-
-    if (newMainImage && newMainImage.startsWith('data:image')) {
-      newMainImage = await recompressUrl(newMainImage);
-      modified = true;
-    }
-
-    if (newImagesList.length > 0) {
-      for (let i = 0; i < newImagesList.length; i++) {
-        if (newImagesList[i].startsWith('data:image')) {
-          newImagesList[i] = await recompressUrl(newImagesList[i]);
-          modified = true;
-        }
-      }
-    }
-
-    if (modified) {
-      const { error: updateErr } = await supabase.from('products').update({
-        image: newMainImage,
-        images: newImagesList
-      }).eq('id', prod.id);
-
-      if (!updateErr) updatedCount++;
-    }
-  }
-
-  alert(`✅ Successfully compressed and optimized ${updatedCount} products! Refreshing app...`);
-  window.location.reload();
-};
-
 interface Product {
   id: number;
   title: string;
@@ -265,6 +194,77 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
   const [editDesc, setEditDesc] = useState('');
   const [editImageFile, setEditImageFile] = useState<string>('');
   const [editImagesList, setEditImagesList] = useState<string[]>([]);
+
+// --- COMPRESS ALL EXISTING PRODUCTS IN DATABASE ---
+const compressExistingProductsInSupabase = async () => {
+  if (!confirm(`Are you sure you want to re-compress all existing products using the current ${Math.round(compressionQuality * 100)}% quality setting? This will optimize load speeds.`)) return;
+
+  const { data: allProds, error: fetchErr } = await supabase.from('products').select('*');
+  if (fetchErr || !allProds) {
+    alert('Error fetching products for compression: ' + (fetchErr?.message || 'Unknown error'));
+    return;
+  }
+
+  let updatedCount = 0;
+  for (const prod of allProds) {
+    let modified = false;
+    let newMainImage = prod.image;
+    let newImagesList = prod.images ? [...prod.images] : [];
+
+    // Helper to compress a base64 or URL image
+    const recompressUrl = async (url: string): Promise<string> => {
+      if (!url || !url.startsWith('data:image')) return url; // Skip external unsplash URLs if any
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.src = url;
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width;
+          let h = img.height;
+          const maxW = 1000;
+          if (w > maxW) {
+            h = Math.round((h * maxW) / w);
+            w = maxW;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(url); return; }
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', compressionQuality));
+        };
+        img.onerror = () => resolve(url);
+      });
+    };
+
+    if (newMainImage && newMainImage.startsWith('data:image')) {
+      newMainImage = await recompressUrl(newMainImage);
+      modified = true;
+    }
+
+    if (newImagesList.length > 0) {
+      for (let i = 0; i < newImagesList.length; i++) {
+        if (newImagesList[i].startsWith('data:image')) {
+          newImagesList[i] = await recompressUrl(newImagesList[i]);
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      const { error: updateErr } = await supabase.from('products').update({
+        image: newMainImage,
+        images: newImagesList
+      }).eq('id', prod.id);
+
+      if (!updateErr) updatedCount++;
+    }
+  }
+
+  alert(`✅ Successfully compressed and optimized ${updatedCount} products! Refreshing app...`);
+  window.location.reload();
+};
 
   // --- CLOUD FETCHING & REAL-TIME AUTO-REFRESH SUBSCRIPTIONS ---
   useEffect(() => {
