@@ -510,27 +510,6 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
     }
   };
 
-  const handleMultipleFilesChange = (e: ChangeEvent<HTMLInputElement>, setTargetImages: React.Dispatch<React.SetStateAction<string[]>>) => {
-    const files = e.target.files;
-    if (!files) return;
-    
-    const readers: Promise<string>[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      readers.push(
-        new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        })
-      );
-    }
-
-    Promise.all(readers).then((base64Images) => {
-      setTargetImages(prev => [...prev, ...base64Images]);
-    });
-  };
-
   const handleAddNewProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedPrice = Number(newPrice);
