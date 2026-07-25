@@ -62,12 +62,19 @@ export default function Home() {
   // --- STATE ---
   const adminEmails = ['darlingjude9@gmail.com', 'judecherish233@gmail.com'];
   
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('shop4everything_products_cache');
+      if (cached) {
+        try { return JSON.parse(cached); } catch (e) {}
+      }
+    }
+    return [];
+  });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
   const [broadcasts, setBroadcasts] = useState<BroadcastEntry[]>([]);
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastEntry | null>(null);
-
   const [settings, setSettings] = useState<StoreSettings>({
     storeName: 'SHOP4EVERYTHING',
     storeTagline: 'Online Varieties, Wares & Decor',
@@ -143,8 +150,10 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
   useEffect(() => {
     const fetchGlobalData = async () => {
       const { data: prodData } = await supabase.from('products').select('*').order('id', { ascending: false });
-      if (prodData) setProducts(prodData as Product[]);
- 
+      if (prodData) {
+        setProducts(prodData as Product[]);
+        localStorage.setItem('shop4everything_products_cache', JSON.stringify(prodData));
+      }
       const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
       if (setData) setSettings(setData as StoreSettings);
  
