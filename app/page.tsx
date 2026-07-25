@@ -1464,6 +1464,43 @@ const compressExistingProductsInSupabase = async () => {
           </div>
         </div>
       )}
+
+      {/* ===== COLOR VARIANT MINI VIEWER MODAL ===== */}
+      {viewingProductImages && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }} onClick={() => setViewingProductImages(null)}>
+          <div className="glass-card" style={{ maxWidth: '480px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff', maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#00f2fe' }}>🎨 Color Variants</h3>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Tap any color to add to cart</span>
+              </div>
+              <button onClick={() => setViewingProductImages(null)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              {viewingProductImages.map((imgUrl, idx) => (
+                <div 
+                  key={idx} 
+                  onClick={() => {
+                    const parentProduct = products.find(p => p.images && p.images.includes(imgUrl));
+                    if (parentProduct) {
+                      addToCart(parentProduct, imgUrl, idx + 1);
+                      setViewingProductImages(null);
+                    }
+                  }}
+                  style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden', border: '2px solid rgba(0,242,254,0.4)', background: '#000', height: '160px', cursor: 'pointer' }}
+                  title="Click to add this color variant to cart"
+                >
+                  <img src={imgUrl} alt={`Color Variant ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.85)', color: '#00f2fe', fontSize: '0.7rem', fontWeight: '900', padding: '3px 8px', borderRadius: '6px' }}>
+                    Image {idx + 1} (Tap to Buy)
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
