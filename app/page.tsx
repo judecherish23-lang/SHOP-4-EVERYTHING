@@ -1379,3 +1379,6 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
           </div>
         </div>
       )}
+    </div>
+  );
+}
