@@ -3,6 +3,43 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { supabase } from '../lib/supabase';
 
+// --- CLIENT-SIDE IMAGE COMPRESSOR UTILITY ---
+const compressImageFile = (file: File, quality: number = 0.7, maxWidth: number = 1000): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to process image canvas context.'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedDataUrl);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 interface Product {
   id: number;
   title: string;
@@ -120,6 +157,7 @@ export default function Home() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProductImages, setViewingProductImages] = useState<string[] | null>(null);
 
+  const [compressionQuality, setCompressionQuality] = useState<number>(0.7);
 const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(null);
 
   // Founder Info (Static for now)
@@ -462,6 +500,24 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
         setTargetImage(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleMultipleFilesChange = async (e: ChangeEvent<HTMLInputElement>, setTargetImages: React.Dispatch<React.SetStateAction<string[]>>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const compressedPromises: Promise<string>[] = [];
+    for (let i = 0; i < files.length; i++) {
+      compressedPromises.push(compressImageFile(files[i], compressionQuality));
+    }
+
+    try {
+      const processedImages = await Promise.all(compressedPromises);
+      setTargetImages(prev => [...prev, ...processedImages]);
+    } catch (err) {
+      console.error('Image compression failed', err);
+      alert('Error compressing images. Please try different files.');
     }
   };
 
@@ -1253,13 +1309,13 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
         </div>
       )}
 
-     {/* ===== EDIT ITEM MODAL (MULTI-IMAGE / COLOR VARIANTS) ===== */}
+     {/* ===== EDIT ITEM MODAL WITH COMPRESSOR & FULL IMAGE MANAGER ===== */}
       {editingProduct && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }}>
-          <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)' }} onClick={() => setEditingProduct(null)}>
+          <div className="glass-card" style={{ maxWidth: '520px', width: '100%', padding: '28px', maxHeight: '90vh', overflowY: 'auto', background: isDark ? '#0f172a' : '#ffffff' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#ff3366' }}>✏️ Edit Product</h3>
-              <button onClick={() => setEditingProduct(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#ff3366' }}>✏️ Edit Product & Manage Images</h3>
+              <button onClick={() => setEditingProduct(null)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
             <form onSubmit={handleSaveEditProduct}>
               <div style={{ marginBottom: '12px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Title</label><input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
@@ -1269,90 +1325,57 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
                 <div style={{ flex: 1 }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Fake Price</label><input type="number" value={editOriginalPrice} onChange={(e) => setEditOriginalPrice(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               </div>
               
-              {/* Multi-Image Edit Selection */}
+              {/* IMAGE COMPRESSION LEVEL CONTROLLER */}
+              <div style={{ marginBottom: '14px', background: 'rgba(0,242,254,0.08)', padding: '10px', borderRadius: '12px', border: '1px solid rgba(0,242,254,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#00f2fe' }}>⚡ Image Compressor Quality</label>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#fff' }}>{Math.round(compressionQuality * 100)}% Quality</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.3" 
+                  max="0.95" 
+                  step="0.05" 
+                  value={compressionQuality} 
+                  onChange={(e) => setCompressionQuality(parseFloat(e.target.value))} 
+                  style={{ width: '100%', accentColor: '#00f2fe', cursor: 'pointer' }} 
+                />
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Lower quality = smaller file size & faster loading speeds.</span>
+              </div>
+
+              {/* Multi-Image Edit & Removal Manager */}
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>📷 Update Color Variant Images</label>
-                <input type="file" accept="image/*" multiple onChange={(e) => handleMultipleFilesChange(e, setEditImagesList)} style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #ff3366', color: '#fff' }} />
-                {editImagesList.length > 0 && (
-                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '10px', paddingBottom: '4px' }}>
-                    {editImagesList.map((img, idx) => (
-                      <img key={idx} src={img} alt="Preview" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, border: '1px solid #ff3366' }} />
+                <label style={{ fontSize: '0.78rem', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>📷 Update & Manage Color Variant Images (Tap ✕ to remove)</label>
+                <input type="file" accept="image/*" multiple onChange={(e) => handleMultipleFilesChange(e, setEditImagesList)} style={{ width: '100%', padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px dashed #ff3366', color: '#fff', marginBottom: '10px' }} />
+                
+                {editImagesList.length > 0 ? (
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {editImagesList.map((imgUrl, idx) => (
+                      <div key={idx} style={{ position: 'relative', width: '70px', height: '70px', flexShrink: 0, borderRadius: '8px', overflow: 'hidden', border: '1px solid #ff3366', background: '#000' }}>
+                        <img src={imgUrl} alt={`Variant ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setEditImagesList(prev => prev.filter((_, i) => i !== idx));
+                          }} 
+                          style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', fontSize: '0.7rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Remove image"
+                        >
+                          ✕
+                        </button>
+                        <span style={{ position: 'absolute', bottom: '2px', left: '2px', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '0.55rem', padding: '1px 3px', borderRadius: '4px' }}>Img {idx + 1}</span>
+                      </div>
                     ))}
                   </div>
+                ) : (
+                  <p style={{ fontSize: '0.75rem', color: '#ef4444' }}>⚠️ At least one image is recommended.</p>
                 )}
               </div>
 
               <div style={{ marginBottom: '12px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Tag</label><input type="text" value={editTag} onChange={(e) => setEditTag(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
               <div style={{ marginBottom: '18px' }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Description</label><textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
-              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}>💾 Save Changes</button>
+              <button type="submit" style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}>💾 Save & Compress Changes</button>
             </form>
           </div>
         </div>
       )}
-
-      {/* ===== MULTI-IMAGE COLOR VARIANTS MINI VIEWER & SELECTOR MODAL ===== */}
-      {viewingProductImages && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }} onClick={() => setViewingProductImages(null)}>
-          <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff', maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#00f2fe', textTransform: 'uppercase' }}>Color Variants</span>
-                <h3 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: '900' }}>Select Desired Color</h3>
-              </div>
-              <button onClick={() => setViewingProductImages(null)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
-            </div>
-
-            <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '14px' }}>Tap a color variant below to select it, then add it directly to your cart.</p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-              {viewingProductImages.map((imgUrl, idx) => {
-                const isSelected = selectedVariantImage === imgUrl || (!selectedVariantImage && idx === 0);
-                return (
-                  <div 
-                    key={idx} 
-                    onClick={() => setSelectedVariantImage(imgUrl)}
-                    style={{ 
-                      borderRadius: '14px', 
-                      overflow: 'hidden', 
-                      border: isSelected ? '3px solid #ff3366' : '1px solid rgba(255,255,255,0.1)', 
-                      background: '#000', 
-                      height: '180px', 
-                      cursor: 'pointer',
-                      position: 'relative',
-                      boxShadow: isSelected ? '0 0 15px rgba(255,51,106,0.5)' : 'none'
-                    }}
-                  >
-                    <img src={imgUrl} alt={`Variant ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    {isSelected && (
-                      <span style={{ position: 'absolute', top: '8px', right: '8px', background: '#ff3366', color: '#fff', fontSize: '0.7rem', fontWeight: '900', padding: '2px 8px', borderRadius: '10px' }}>Selected ✓</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              <button 
-                onClick={() => {
-                  const targetProduct = products.find(p => p.images === viewingProductImages || p.image === viewingProductImages[0]);
-                  if (targetProduct && viewingProductImages) {
-                    const selectedIdx = viewingProductImages.findIndex(img => img === selectedVariantImage);
-                    const colorIndexNumber = selectedIdx !== -1 ? selectedIdx + 1 : 1;
-                    addToCart(targetProduct, selectedVariantImage || viewingProductImages[0], colorIndexNumber);
-                  }
-                  setViewingProductImages(null);
-                  setSelectedVariantImage(null);
-                }} 
-                style={{ flex: 1, padding: '12px', background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', borderRadius: '30px', fontWeight: '900', cursor: 'pointer' }}
-              >
-                🛒 Add Selected Color to Cart
-              </button>
-              <button onClick={() => { setViewingProductImages(null); setSelectedVariantImage(null); }} style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.1)', color: isDark ? '#fff' : '#000', border: 'none', borderRadius: '30px', fontWeight: '800', cursor: 'pointer' }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
