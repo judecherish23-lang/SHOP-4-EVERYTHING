@@ -40,6 +40,77 @@ const compressImageFile = (file: File, quality: number = 0.7, maxWidth: number =
   });
 };
 
+// --- COMPRESS ALL EXISTING PRODUCTS IN DATABASE ---
+const compressExistingProductsInSupabase = async () => {
+  if (!confirm(`Are you sure you want to re-compress all existing products using the current ${Math.round(compressionQuality * 100)}% quality setting? This will optimize load speeds.`)) return;
+
+  const { data: allProds, error: fetchErr } = await supabase.from('products').select('*');
+  if (fetchErr || !allProds) {
+    alert('Error fetching products for compression: ' + (fetchErr?.message || 'Unknown error'));
+    return;
+  }
+
+  let updatedCount = 0;
+  for (const prod of allProds) {
+    let modified = false;
+    let newMainImage = prod.image;
+    let newImagesList = prod.images ? [...prod.images] : [];
+
+    // Helper to compress a base64 or URL image
+    const recompressUrl = async (url: string): Promise<string> => {
+      if (!url || !url.startsWith('data:image')) return url; // Skip external unsplash URLs if any
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.src = url;
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width;
+          let h = img.height;
+          const maxW = 1000;
+          if (w > maxW) {
+            h = Math.round((h * maxW) / w);
+            w = maxW;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(url); return; }
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', compressionQuality));
+        };
+        img.onerror = () => resolve(url);
+      });
+    };
+
+    if (newMainImage && newMainImage.startsWith('data:image')) {
+      newMainImage = await recompressUrl(newMainImage);
+      modified = true;
+    }
+
+    if (newImagesList.length > 0) {
+      for (let i = 0; i < newImagesList.length; i++) {
+        if (newImagesList[i].startsWith('data:image')) {
+          newImagesList[i] = await recompressUrl(newImagesList[i]);
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      const { error: updateErr } = await supabase.from('products').update({
+        image: newMainImage,
+        images: newImagesList
+      }).eq('id', prod.id);
+
+      if (!updateErr) updatedCount++;
+    }
+  }
+
+  alert(`✅ Successfully compressed and optimized ${updatedCount} products! Refreshing app...`);
+  window.location.reload();
+};
+
 interface Product {
   id: number;
   title: string;
@@ -157,7 +228,18 @@ export default function Home() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProductImages, setViewingProductImages] = useState<string[] | null>(null);
 
-  const [compressionQuality, setCompressionQuality] = useState<number>(0.7);
+  const [compressionQuality, setCompressionQuality] = useState<number>(() => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('shop4everything_compression_quality');
+    if (saved) return parseFloat(saved);
+  }
+  return 0.7;
+});
+
+// Save quality choice whenever it changes so it never resets automatically
+useEffect(() => {
+  localStorage.setItem('shop4everything_compression_quality', compressionQuality.toString());
+}, [compressionQuality]);
 const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(null);
 
   // Founder Info (Static for now)
@@ -888,7 +970,13 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
                     <button onClick={() => handleDeleteProduct(product.id)} style={{ background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '12px', fontWeight: '900', fontSize: '0.72rem', cursor: 'pointer' }}>🗑️</button>
                   </div>
                 )}
-                <div style={{ position: 'relative', height: '220px', width: '100%', overflow: 'hidden', background: '#000' }}>
+                <div 
+                  onClick={() => {
+                    const activeImages = product.images && product.images.length > 0 ? product.images : [product.image];
+                    setViewingProductImages(activeImages);
+                  }}
+                  style={{ position: 'relative', height: '220px', width: '100%', overflow: 'hidden', background: '#000', cursor: 'pointer' }}
+                >
                   <img src={product.image} alt={product.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   <span style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', color: '#fff', padding: '4px 10px', borderRadius: '14px', fontSize: '0.72rem', fontWeight: '800' }}>{product.tag}</span>
 
@@ -1254,6 +1342,35 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
               <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Actual Price</label><input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} required style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
                 <div style={{ flex: 1 }}><label style={{ fontSize: '0.78rem', fontWeight: 'bold' }}>Fake Price (Optional)</label><input type="number" value={newOriginalPrice} onChange={(e) => setNewOriginalPrice(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} /></div>
+              </div>
+
+              {/* COMPRESSOR QUALITY SLIDER FOR UPLOADS */}
+              <div style={{ marginBottom: '14px', background: 'rgba(0,242,254,0.08)', padding: '10px', borderRadius: '12px', border: '1px solid rgba(0,242,254,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 'bold', color: '#00f2fe' }}>⚡ Active Image Compressor Quality</label>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '900', color: '#fff' }}>{Math.round(compressionQuality * 100)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.35" 
+                  max="0.95" 
+                  step="0.05" 
+                  value={compressionQuality} 
+                  onChange={(e) => setCompressionQuality(parseFloat(e.target.value))} 
+                  style={{ width: '100%', accentColor: '#00f2fe', cursor: 'pointer' }} 
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                  <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Applies instantly to all new uploads & saves preference.</span>
+                  {currentUser?.email === settings.adminEmail && (
+                    <button 
+                      type="button" 
+                      onClick={compressExistingProductsInSupabase}
+                      style={{ background: '#ff3366', color: '#fff', border: 'none', padding: '2px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900', cursor: 'pointer' }}
+                    >
+                      🚀 Compress All Old DB Items
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Multi-Image File Selection */}
