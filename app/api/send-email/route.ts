@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import nodemailer from 'nodemailer';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { to, subject, type, message, storeName } = body;
+    const { to, subject, type, message, storeName } = await req.json();
 
-    if (!process.env.RESEND_API_KEY) {
-      console.error("CRITICAL: RESEND_API_KEY is missing in Vercel environment variables.");
-      return NextResponse.json({ success: false, error: "Server missing RESEND_API_KEY" }, { status: 500 });
-    }
+    // Configure Gmail SMTP with your App Password
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'judecherish23@gmail.com',
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    });
 
     const buttonText = type === 'welcome' ? 'COMPLETE YOUR REGISTRATION' : 'VIEW LATEST UPDATES';
-    const siteUrl = 'https://shop-4-everything.vercel.app'; 
+    const siteUrl = 'https://shop-4-everything.vercel.app';
 
     const htmlTemplate = `
       <div style="background-color: #1a1a1a; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px 20px; margin: 0;">
@@ -41,24 +42,24 @@ export async function POST(req: Request) {
       </div>
     `;
 
+    // Handle single recipient or array
     const recipients = Array.isArray(to) ? to : [to];
 
-    const emailPromises = recipients.map(recipient => 
-      resend.emails.send({
-        from: `SHOP4EVERYTHING <judecherish23@gmail.com>`,
-        to: [recipient],
+    // Send to each recipient
+    const emailPromises = recipients.map(recipient =>
+      transporter.sendMail({
+        from: `"${storeName || 'SHOP4EVERYTHING'}" <judecherish23@gmail.com>`,
+        to: recipient,
         subject: subject || 'Store Update',
         html: htmlTemplate,
       })
     );
 
-    const results = await Promise.all(emailPromises);
-    console.log("Resend email dispatch results:", results);
-
-    return NextResponse.json({ success: true, results });
+    await Promise.all(emailPromises);
+    return NextResponse.json({ success: true });
 
   } catch (error: any) {
-    console.error('Resend API Route Execution Error:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Unknown server error' }, { status: 500 });
+    console.error('Email API Error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

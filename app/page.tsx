@@ -130,6 +130,8 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   
+  const [storeOrders, setStoreOrders] = useState<any[]>([]);
+ 
   // UI States
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
@@ -285,6 +287,9 @@ const compressExistingProductsInSupabase = async () => {
  
       const { data: usrData } = await supabase.from('store_users').select('*');
       if (usrData) setRegisteredUsers(usrData as User[]);
+
+      const { data: ordData } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+      if (ordData) setStoreOrders(ordData);
     };
 
     fetchGlobalData();
@@ -435,7 +440,7 @@ const compressExistingProductsInSupabase = async () => {
         return;
       }
 
-      const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
+      const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).maybeSingle();
 
       if (existingUser) {
         loggedUser = existingUser as User;
@@ -446,12 +451,14 @@ const compressExistingProductsInSupabase = async () => {
           isEligibleToUpload: isAdmin
         };
 
-        const { error: insertError } = await supabase.from('store_users').insert([loggedUser]);
+        const { error: insertError } = await supabase.from('store_users').upsert([loggedUser], { onConflict: 'email' });
         if (insertError) {
           alert('Database profile error: ' + insertError.message);
           return;
         }
-        setRegisteredUsers(prev => [...prev, loggedUser]);
+        
+        const { data: freshUsers } = await supabase.from('store_users').select('*');
+        if (freshUsers) setRegisteredUsers(freshUsers as User[]);
       }
       
       try {
@@ -485,19 +492,17 @@ const compressExistingProductsInSupabase = async () => {
         return;
       }
 
-      const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).single();
-
-      if (!existingUser && !isAdmin) {
-        alert('No account profile found. Please register first.');
-        setAuthMode('register');
-        return;
-      }
+      const { data: existingUser } = await supabase.from('store_users').select('*').eq('email', emailClean).maybeSingle();
 
       loggedUser = (existingUser as User) || {
         email: emailClean,
         role: isAdmin ? 'admin' : 'buyer',
         isEligibleToUpload: isAdmin
       };
+
+      if (!existingUser) {
+        await supabase.from('store_users').upsert([loggedUser], { onConflict: 'email' });
+      }
 
       if (isAdmin && loggedUser.role !== 'admin') {
         loggedUser.role = 'admin';
@@ -1077,16 +1082,35 @@ const compressExistingProductsInSupabase = async () => {
 
               {dashboardSection === 'orders' && (
                 <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Current Cart Details</div>
-                  {cart.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>No pending orders.</p> : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Current Cart</div>
+                  {cart.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '15px' }}>Your cart is empty.</p> : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
                       {cart.map((item) => (
                         <div key={item.product.id} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)' }}>
                           <div style={{ fontWeight: '800' }}>{item.product.title}</div>
                           <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Qty: {item.quantity} • {settings.currencySymbol}{(item.product.price * item.quantity).toLocaleString()}</div>
                         </div>
                       ))}
-                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px', marginTop: '5px', fontWeight: '900' }}>Total (w/ delivery): {settings.currencySymbol}{grandTotal.toLocaleString()}</div>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#00f2fe', marginBottom: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>📦 Order History & Logs</div>
+                  {storeOrders.length === 0 ? (
+                    <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>No past orders recorded yet.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
+                      {storeOrders
+                        .filter(o => isUserAdmin || o.user_email === currentUser?.email)
+                        .map((ord) => (
+                          <div key={ord.id} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(0,242,254,0.06)', border: '1px solid rgba(0,242,254,0.2)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#00f2fe' }}>
+                              <span>Order #{ord.id}</span>
+                              <span style={{ color: ord.status === 'Pending' ? '#ff3366' : '#25d366' }}>{ord.status}</span>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '4px 0' }}>{new Date(ord.created_at).toLocaleDateString()} • {ord.user_email}</div>
+                            <div style={{ fontWeight: '900', fontSize: '0.85rem' }}>Total: {settings.currencySymbol}{ord.grand_total.toLocaleString()}</div>
+                          </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1267,7 +1291,37 @@ const compressExistingProductsInSupabase = async () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '1.2rem', fontWeight: '900' }}><span>Grand Total:</span><span style={{ color: '#ff3366' }}>{settings.currencySymbol}{grandTotal.toLocaleString()}</span></div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <a href={generateWhatsAppLink(settings.primaryPhone)} target="_blank" rel="noreferrer" style={{ background: '#25d366', color: '#fff', padding: '14px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '900', fontSize: '0.92rem', boxShadow: '0 4px 20px rgba(37,211,102,0.4)', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>SEND ORDERS NOW</a>
+                <button 
+                  type="button"
+                  onClick={async () => {
+                    if (cart.length === 0) return;
+                    
+                    // 1. Save order to Supabase database
+                    const orderPayload = {
+                      user_email: currentUser?.email || 'guest@shop4everything.com',
+                      items: cart.map(i => ({
+                        title: i.product.title,
+                        price: i.product.price,
+                        quantity: i.quantity,
+                        colorIndex: i.selectedColorIndex || 1,
+                        image: i.selectedColorImage || i.product.image
+                      })),
+                      subtotal: cartSubtotal,
+                      delivery_fee: settings.deliveryFee,
+                      grand_total: grandTotal,
+                      status: 'Pending'
+                    };
+
+                    await supabase.from('orders').insert([orderPayload]);
+
+                    // 2. Open WhatsApp link
+                    window.open(generateWhatsAppLink(settings.primaryPhone), '_blank');
+                    setIsCartOpen(false);
+                  }}
+                  style={{ background: '#25d366', color: '#fff', padding: '14px', borderRadius: '30px', border: 'none', textAlign: 'center', fontWeight: '900', fontSize: '0.92rem', boxShadow: '0 4px 20px rgba(37,211,102,0.4)', cursor: 'pointer', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}
+                >
+                  SEND ORDERS NOW (Save & WhatsApp)
+                </button>
                 <a href={generateWhatsAppLink(settings.backupPhone)} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.06)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '10px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.8rem', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>📞 Backup Line ({settings.backupPhone}) →</a>
               </div>
             </div>
