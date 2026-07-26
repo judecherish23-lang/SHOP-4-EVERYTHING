@@ -167,17 +167,24 @@ export default function Home() {
   // UI States
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
-  const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder' | 'broadcast' | 'settings' | 'account'>('overview');
+  const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder' | 'broadcast' | 'settings' | 'account' | 'policy'>('overview');
   
+  // Modals & Chatbot States
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([
+    { role: 'assistant', content: 'Hi! I am Darling Chatbot 🤖. How can I help you with your shopping today?' }
+  ]);
+
   const [broadcastSubject, setBroadcastSubject] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastStatus, setBroadcastStatus] = useState('');
-  
+
   const isDark = true;
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallCard, setShowInstallCard] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-
   // Authentication State (Member Login vs Guest Registration)
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -228,6 +235,38 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
   const [editDesc, setEditDesc] = useState('');
   const [editImageFile, setEditImageFile] = useState<string>('');
   const [editImagesList, setEditImagesList] = useState<string[]>([]);
+
+const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
+
+    // Show the user's message immediately
+    const newMessages: {role: 'user' | 'assistant', content: string}[] = [
+      ...chatMessages, 
+      { role: 'user', content: chatInput }
+    ];
+    setChatMessages(newMessages);
+    setChatInput(''); // Clear the input box
+
+    try {
+      // Send the chat history to our secure backend route
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages, storeName: settings.storeName })
+      });
+
+      const data = await response.json();
+      
+      // Update chat with Darling Chatbot's reply
+      if (data.reply) {
+        setChatMessages([...newMessages, { role: 'assistant', content: data.reply }]);
+      } else {
+        setChatMessages([...newMessages, { role: 'assistant', content: "Sorry, I'm having connection issues right now 😵‍💫" }]);
+      }
+    } catch (err) {
+      setChatMessages([...newMessages, { role: 'assistant', content: "Network error. Can't reach the server." }]);
+    }
+  };
 
 // --- AUTOMATIC CONVERTER: BASE64 TO SUPABASE STORAGE CDN URLS ---
   const compressExistingProductsInSupabase = async () => {
@@ -808,6 +847,7 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
     { id: 'shop', label: 'Shop Management', icon: '🛍️' },
     { id: 'orders', label: 'My Cart & Orders', icon: '📦' },
     { id: 'broadcast', label: 'Inbox & Broadcasts', icon: '📣' },
+    { id: 'policy', label: 'Terms & Return Policy', icon: '📜' },
     { id: 'account', label: currentUser ? 'Account & Logout' : 'Member Login', icon: currentUser ? '👤' : '🔐' },
     { id: 'founder', label: 'Contact Founder', icon: '👑' },
     ...(isUserAdmin ? [{ id: 'customers', label: 'User Roles', icon: '👥' }, { id: 'settings', label: 'Global Settings', icon: '⚙️' }] : [])
@@ -1217,6 +1257,25 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
                 </div>
               )}
 
+              {dashboardSection === 'policy' && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '10px' }}>Terms & Return Policy</div>
+                  <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', fontSize: '0.85rem', lineHeight: '1.7', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <strong style={{ color: '#00f2fe' }}>1. Payment Terms:</strong>
+                    <p style={{ marginBottom: '12px', marginTop: '4px' }}>All orders must be paid in full to the provided official bank accounts before dispatch. Cash on delivery is not supported unless explicitly agreed upon.</p>
+                    
+                    <strong style={{ color: '#00f2fe' }}>2. Return & Exchange Policy:</strong>
+                    <p style={{ marginBottom: '12px', marginTop: '4px' }}>Returns are accepted within 3 days of delivery only if the item received is defective or significantly different from the description. Items must be in their original, unused condition.</p>
+                    
+                    <strong style={{ color: '#00f2fe' }}>3. Shipping & Dispatch:</strong>
+                    <p style={{ marginBottom: '12px', marginTop: '4px' }}>Orders are dispatched within 24-48 hours after payment confirmation. Delivery times vary by your location.</p>
+                    
+                    <strong style={{ color: '#00f2fe' }}>4. Customer Support:</strong>
+                    <p style={{ marginTop: '4px' }}>If you experience any issues with your order, please contact our founder directly via the WhatsApp lines provided in the contact section.</p>
+                  </div>
+                </div>
+              )}
+
               {dashboardSection === 'founder' && (
                 <div>
                   <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '10px' }}>Founder Contact</div>
@@ -1320,38 +1379,77 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <button 
                   type="button"
-                  onClick={async () => {
+                  onClick={() => {
                     if (cart.length === 0) return;
-                    
-                    // 1. Save order to Supabase database
-                    const orderPayload = {
-                      user_email: currentUser?.email || 'guest@shop4everything.com',
-                      items: cart.map(i => ({
-                        title: i.product.title,
-                        price: i.product.price,
-                        quantity: i.quantity,
-                        colorIndex: i.selectedColorIndex || 1,
-                        image: i.selectedColorImage || i.product.image
-                      })),
-                      subtotal: cartSubtotal,
-                      delivery_fee: settings.deliveryFee,
-                      grand_total: grandTotal,
-                      status: 'Pending'
-                    };
-
-                    await supabase.from('orders').insert([orderPayload]);
-
-                    // 2. Open WhatsApp link
-                    window.open(generateWhatsAppLink(settings.primaryPhone), '_blank');
-                    setIsCartOpen(false);
+                    setIsCheckoutModalOpen(true); // Triggers the bank popup
                   }}
                   style={{ background: '#25d366', color: '#fff', padding: '14px', borderRadius: '30px', border: 'none', textAlign: 'center', fontWeight: '900', fontSize: '0.92rem', boxShadow: '0 4px 20px rgba(37,211,102,0.4)', cursor: 'pointer', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}
                 >
-                  SEND ORDERS NOW (Save & WhatsApp)
+                  SEND ORDERS NOW
                 </button>
                 <a href={generateWhatsAppLink(settings.backupPhone)} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.06)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '10px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.8rem', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>📞 Backup Line ({settings.backupPhone}) →</a>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CHECKOUT BANK DETAILS MODAL ===== */}
+      {isCheckoutModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div className="glass-card" style={{ maxWidth: '420px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#00f2fe' }}>🏦 Secure Payment</h3>
+              <button onClick={() => setIsCheckoutModalOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '16px' }}>
+              To complete your order of <strong style={{ color: '#ff3366', fontSize: '1rem' }}>{settings.currencySymbol}{grandTotal.toLocaleString()}</strong>, please transfer the exact amount to any of our official accounts below:
+            </p>
+
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', marginBottom: '12px', border: '1px solid rgba(0,242,254,0.3)' }}>
+              <div style={{ fontSize: '0.75rem', color: '#ff3366', fontWeight: '900', marginBottom: '4px', textTransform: 'uppercase' }}>Option 1: OPay</div>
+              <div style={{ fontWeight: '900', fontSize: '1.1rem', letterSpacing: '1px' }}>6110935365</div>
+              <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>DARLINGTINA Chiamaka JUDE</div>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', marginBottom: '24px', border: '1px solid rgba(0,242,254,0.3)' }}>
+              <div style={{ fontSize: '0.75rem', color: '#ff3366', fontWeight: '900', marginBottom: '4px', textTransform: 'uppercase' }}>Option 2: Guaranty Trust Bank (GTB)</div>
+              <div style={{ fontWeight: '900', fontSize: '1.1rem', letterSpacing: '1px' }}>0939827195</div>
+              <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>Darlingtina Chiamaka Jude</div>
+            </div>
+
+            <button 
+              onClick={async () => {
+                // Step 2: Save order to Supabase database
+                const orderPayload = {
+                  user_email: currentUser?.email || 'guest@shop4everything.com',
+                  items: cart.map(i => ({
+                    title: i.product.title,
+                    price: i.product.price,
+                    quantity: i.quantity,
+                    colorIndex: i.selectedColorIndex || 1,
+                    image: i.selectedColorImage || i.product.image
+                  })),
+                  subtotal: cartSubtotal,
+                  delivery_fee: settings.deliveryFee,
+                  grand_total: grandTotal,
+                  status: 'Pending'
+                };
+
+                await supabase.from('orders').insert([orderPayload]);
+
+                // Step 3: Open WhatsApp link to send the order evidence
+                window.open(generateWhatsAppLink(settings.primaryPhone), '_blank');
+                
+                // Step 4: Close the modals
+                setIsCheckoutModalOpen(false);
+                setIsCartOpen(false);
+              }}
+              style={{ width: '100%', padding: '14px', borderRadius: '30px', background: 'linear-gradient(135deg, #25d366, #128c7e)', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer', boxShadow: '0 4px 15px rgba(37,211,102,0.3)' }}
+            >
+              ✓ I HAVE MADE PAYMENT
+            </button>
           </div>
         </div>
       )}
@@ -1578,6 +1676,126 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
                   </div>
                 </div>
               ))}
+
+              {/* ===== CHECKOUT BANK DETAILS MODAL ===== */}
+      {isCheckoutModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div className="glass-card" style={{ maxWidth: '420px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '900', color: '#00f2fe' }}>🏦 Secure Payment</h3>
+              <button onClick={() => setIsCheckoutModalOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '16px' }}>
+              To complete your order of <strong style={{ color: '#ff3366', fontSize: '1rem' }}>{settings.currencySymbol}{grandTotal.toLocaleString()}</strong>, please transfer the exact amount to any of our official accounts below:
+            </p>
+
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', marginBottom: '12px', border: '1px solid rgba(0,242,254,0.3)' }}>
+              <div style={{ fontSize: '0.75rem', color: '#ff3366', fontWeight: '900', marginBottom: '4px', textTransform: 'uppercase' }}>Option 1: OPay</div>
+              <div style={{ fontWeight: '900', fontSize: '1.1rem', letterSpacing: '1px' }}>6110935365</div>
+              <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>DARLINGTINA Chiamaka JUDE</div>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', marginBottom: '24px', border: '1px solid rgba(0,242,254,0.3)' }}>
+              <div style={{ fontSize: '0.75rem', color: '#ff3366', fontWeight: '900', marginBottom: '4px', textTransform: 'uppercase' }}>Option 2: Guaranty Trust Bank (GTB)</div>
+              <div style={{ fontWeight: '900', fontSize: '1.1rem', letterSpacing: '1px' }}>0939827195</div>
+              <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>Darlingtina Chiamaka Jude</div>
+            </div>
+
+            <button 
+              onClick={async () => {
+                // 1. Save order to Supabase database
+                const orderPayload = {
+                  user_email: currentUser?.email || 'guest@shop4everything.com',
+                  items: cart.map(i => ({
+                    title: i.product.title,
+                    price: i.product.price,
+                    quantity: i.quantity,
+                    colorIndex: i.selectedColorIndex || 1,
+                    image: i.selectedColorImage || i.product.image
+                  })),
+                  subtotal: cartSubtotal,
+                  delivery_fee: settings.deliveryFee,
+                  grand_total: grandTotal,
+                  status: 'Pending'
+                };
+
+                await supabase.from('orders').insert([orderPayload]);
+
+                // 2. Open WhatsApp link & Close modals
+                window.open(generateWhatsAppLink(settings.primaryPhone), '_blank');
+                setIsCheckoutModalOpen(false);
+                setIsCartOpen(false);
+              }}
+              style={{ width: '100%', padding: '14px', borderRadius: '30px', background: 'linear-gradient(135deg, #25d366, #128c7e)', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer', boxShadow: '0 4px 15px rgba(37,211,102,0.3)' }}
+            >
+              ✓ I HAVE MADE PAYMENT
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== FLOATING ACTION BUTTONS (SHARE & CHATBOT) ===== */}
+      <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 90, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <button 
+          onClick={() => {
+            if (navigator.share) {
+              navigator.share({ title: settings.storeName, text: settings.storeTagline, url: window.location.href });
+            } else {
+              navigator.clipboard.writeText(window.location.href);
+              alert('Store link copied to clipboard!');
+            }
+          }}
+          style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' }}
+          title="Share Store"
+        >
+          🔗
+        </button>
+
+        <button 
+          onClick={() => setIsChatOpen(true)}
+          style={{ width: '55px', height: '55px', borderRadius: '50%', background: 'linear-gradient(135deg, #ff3366, #00f2fe)', color: '#fff', fontSize: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 20px rgba(255,51,106,0.4)' }}
+          title="Darling Chatbot"
+        >
+          💬
+        </button>
+      </div>
+
+      {/* ===== DARLING CHATBOT MODAL ===== */}
+      {isChatOpen && (
+        <div style={{ position: 'fixed', bottom: '90px', right: '20px', zIndex: 100, width: '340px', maxWidth: 'calc(100vw - 40px)', height: '420px', background: isDark ? '#0f172a' : '#ffffff', borderRadius: '20px', boxShadow: '0 10px 40px rgba(0,0,0,0.6)', border: '1px solid rgba(0,242,254,0.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ background: 'linear-gradient(135deg, #ff3366, #00f2fe)', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: '900', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem' }}>🤖</span> Darling Chatbot
+            </div>
+            <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+          </div>
+          
+          <div style={{ flex: 1, padding: '14px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.2)' }}>
+            {chatMessages.map((msg, i) => (
+              <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? '#00f2fe' : 'rgba(255,255,255,0.1)', color: msg.role === 'user' ? '#000' : '#fff', padding: '10px 14px', borderRadius: '14px', maxWidth: '85%', fontSize: '0.85rem', lineHeight: '1.4' }}>
+                {msg.content}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.02)' }}>
+            <input 
+              value={chatInput} 
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
+              placeholder="Ask me anything..." 
+              style={{ flex: 1, padding: '10px 14px', borderRadius: '20px', border: 'none', background: 'rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '0.85rem' }}
+            />
+            <button 
+              onClick={handleSendMessage}
+              style={{ background: '#ff3366', color: '#fff', border: 'none', padding: '0 16px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
             </div>
           </div>
         </div>
