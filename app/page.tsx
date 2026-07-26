@@ -40,6 +40,38 @@ const compressImageFile = (file: File, quality: number = 0.7, maxWidth: number =
   });
 };
 
+// --- HELPER TO UPLOAD IMAGE TO SUPABASE STORAGE BUCKET ---
+const uploadBase64ToStorage = async (base64: string, fileName: string): Promise<string> => {
+  // If it's already a public web URL (e.g. from Unsplash or previous upload), return as is
+  if (!base64 || !base64.startsWith('data:image')) return base64;
+
+  try {
+    const response = await fetch(base64);
+    const blob = await response.blob();
+
+    const { data, error } = await supabase.storage
+      .from('product-images')
+      .upload(`public/${fileName}.jpg`, blob, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (error) {
+      console.error('Storage upload error:', error.message);
+      return base64; // Fallback
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('product-images')
+      .getPublicUrl(data.path);
+
+    return publicUrlData.publicUrl;
+  } catch (err) {
+    console.error('Storage helper failed:', err);
+    return base64;
+  }
+};
+
 interface Product {
   id: number;
   title: string;
@@ -606,9 +638,17 @@ const compressExistingProductsInSupabase = async () => {
       alert('Please enter a valid title and price.'); return;
     }
 
-    const primaryImg = newImagesList[0] || newImageFile || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
-    const allImages = newImagesList.length > 0 ? newImagesList : [primaryImg];
+    // Upload images to Supabase Storage bucket first to get small CDN URLs
+    const rawList = newImagesList.length > 0 ? newImagesList : (newImageFile ? [newImageFile] : []);
+    const uploadedUrls: string[] = [];
 
+    for (let i = 0; i < rawList.length; i++) {
+      const url = await uploadBase64ToStorage(rawList[i], `prod-${Date.now()}-${i}`);
+      uploadedUrls.push(url);
+    }
+
+    const primaryImg = uploadedUrls[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
+    const allImages = uploadedUrls.length > 0 ? uploadedUrls : [primaryImg];
     const newItem = {
       title: newTitle.trim(),
       category: newCategory,
@@ -962,7 +1002,18 @@ const compressExistingProductsInSupabase = async () => {
       <main style={{ maxWidth: '1200px', margin: '20px auto 40px auto', padding: '0 20px' }}>
         <div className="responsive-grid">
           {products.length === 0 && (
-            <div style={{ textAlign: 'center', gridColumn: '1 / -1', padding: '40px', color: '#94a3b8' }}>Loading products or database is empty.</div>
+            <div style={{ gridColumn: '1 / -1', padding: '20px 0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
+                {[1, 2, 3, 4, 5, 6].map((idx) => (
+                  <div key={idx} className="glass-card" style={{ height: '320px', borderRadius: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', padding: '16px', gap: '12px' }}>
+                    <div style={{ height: '180px', borderRadius: '12px', background: 'rgba(255,255,255,0.06)' }}></div>
+                    <div style={{ height: '16px', width: '60%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }}></div>
+                    <div style={{ height: '14px', width: '80%', background: 'rgba(255,255,255,0.04)', borderRadius: '4px' }}></div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ textAlign: 'center', color: '#00f2fe', marginTop: '20px', fontWeight: 'bold', fontSize: '0.85rem' }}>⚡ Loading product catalog...</p>
+            </div>
           )}
           {filteredProducts.map(product => {
             const cartItem = cart.find(item => item.product.id === product.id);
