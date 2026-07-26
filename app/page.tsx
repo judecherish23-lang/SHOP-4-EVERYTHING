@@ -245,9 +245,10 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
       let mainImgUrl = prod.image;
       let imagesList = prod.images ? [...prod.images] : [];
 
-      // Convert main image if it's base64
+      // Convert main image if it's base64 (ensure we pass a clean name)
       if (mainImgUrl && mainImgUrl.startsWith('data:image')) {
-        mainImgUrl = await uploadBase64ToStorage(mainImgUrl, `migrated-${prod.id}-main`);
+        // Notice we changed 'migrated-id-main' to 'migrated-id-main-img'
+        mainImgUrl = await uploadBase64ToStorage(mainImgUrl, `migrated-${prod.id}-main-img`);
         modified = true;
       }
 
