@@ -1644,7 +1644,7 @@ const handleSendMessage = async () => {
         </div>
       )}
 
-      {/* ===== COLOR VARIANT MINI VIEWER MODAL ===== */}
+     {/* ===== COLOR VARIANT MINI VIEWER MODAL ===== */}
       {viewingProductImages && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }} onClick={() => setViewingProductImages(null)}>
           <div className="glass-card" style={{ maxWidth: '480px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff', maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
@@ -1676,8 +1676,12 @@ const handleSendMessage = async () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* ===== CHECKOUT BANK DETAILS MODAL ===== */}
+      {/* ===== CHECKOUT BANK DETAILS MODAL ===== */}
       {isCheckoutModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
           <div className="glass-card" style={{ maxWidth: '420px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff' }}>
@@ -1704,7 +1708,7 @@ const handleSendMessage = async () => {
 
             <button 
               onClick={async () => {
-                // 1. Save order to Supabase database
+                // Save order to Supabase database
                 const orderPayload = {
                   user_email: currentUser?.email || 'guest@shop4everything.com',
                   items: cart.map(i => ({
@@ -1722,8 +1726,10 @@ const handleSendMessage = async () => {
 
                 await supabase.from('orders').insert([orderPayload]);
 
-                // 2. Open WhatsApp link & Close modals
+                // Open WhatsApp link to send the order evidence
                 window.open(generateWhatsAppLink(settings.primaryPhone), '_blank');
+                
+                // Close the modals
                 setIsCheckoutModalOpen(false);
                 setIsCartOpen(false);
               }}
@@ -1793,10 +1799,6 @@ const handleSendMessage = async () => {
             >
               Send
             </button>
-          </div>
-        </div>
-      )}
-            </div>
           </div>
         </div>
       )}
