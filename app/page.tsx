@@ -437,6 +437,38 @@ const handleSendMessage = async () => {
     localStorage.setItem('shop4everything_cart', JSON.stringify(cart));
   }, [cart]);
 
+// --- MOBILE HARDWARE BACK BUTTON INTERCEPTOR ---
+  const anyModalOpen = isCartOpen || isDashboardOpen || isCheckoutModalOpen || isChatOpen || isUploadOpen || !!editingProduct || !!viewingProductImages || isLoginOpen;
+
+  useEffect(() => {
+    const handlePopState = () => {
+      // User pressed the hardware back button. Close all active overlays.
+      setIsCartOpen(false);
+      setIsDashboardOpen(false);
+      setIsCheckoutModalOpen(false);
+      setIsChatOpen(false);
+      setIsUploadOpen(false);
+      setEditingProduct(null);
+      setViewingProductImages(null);
+      setIsLoginOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (anyModalOpen) {
+      // When a modal opens, push a dummy state to the browser history
+      window.history.pushState({ popupOpen: true }, '');
+    } else {
+      // If the modal was closed manually via an "X" button, clean up the history silently
+      if (window.history.state && window.history.state.popupOpen) {
+        window.history.back();
+      }
+    }
+  }, [anyModalOpen]);
+
   // --- PWA INSTALL HANDLER ---
   const handleInstallClick = async () => {
     if (!deferredInstallPrompt) {
