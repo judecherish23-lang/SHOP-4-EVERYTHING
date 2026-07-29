@@ -5,7 +5,14 @@ export async function POST(req: Request) {
   try {
     const { to, subject, type, message, storeName } = await req.json();
 
-    // Configure Gmail SMTP with your App Password
+    // 🛡️ Safety check: if any field is missing, return JSON immediately
+    if (!to || !subject || !message) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields: to, subject, message' },
+        { status: 400 }
+      );
+    }
+
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -42,11 +49,9 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    // Handle single recipient or array
     const recipients = Array.isArray(to) ? to : [to];
 
-    // Send to each recipient
-    const emailPromises = recipients.map(recipient =>
+    const emailPromises = recipients.map((recipient) =>
       transporter.sendMail({
         from: `"${storeName || 'SHOP4EVERYTHING'}" <judecherish23@gmail.com>`,
         to: recipient,
