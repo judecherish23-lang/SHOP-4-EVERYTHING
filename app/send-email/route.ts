@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
+export async function GET() {
+  return NextResponse.json({ alive: true, message: 'Route is working' });
+}
+
 export async function POST(req: Request) {
   try {
     const { to, subject, type, message, storeName } = await req.json();
