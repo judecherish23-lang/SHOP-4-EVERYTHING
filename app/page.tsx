@@ -89,13 +89,15 @@ interface CartItem {
   product: Product;
   quantity: number;
   selectedColorImage?: string;
-  selectedColorIndex?: number; // <-- Added to track image number (1, 2, 3...)
+  selectedColorIndex?: number;
+  addedAt?: string; // New: Tracks exactly when an item was added
 }
 
 interface User {
   email: string;
   role: string;
   isEligibleToUpload: boolean;
+  current_cart?: CartItem[]; // New: Syncs the live cart to the cloud
 }
 
 interface BroadcastEntry {
@@ -165,17 +167,25 @@ export default function Home() {
   const [storeOrders, setStoreOrders] = useState<any[]>([]);
  
   // UI States
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
-  const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder' | 'broadcast' | 'settings' | 'account' | 'policy'>('overview');
-  
-  // Modals & Chatbot States
-  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [chatMessages, setChatMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([
-    { role: 'assistant', content: 'Hi! I am Darling Chatbot 🤖. How can I help you with your shopping today?' }
-  ]);
+const [isCartOpen, setIsCartOpen] = useState(false);
+const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder' | 'broadcast' | 'settings' | 'account' | 'policy'>('overview');
+
+// Tracking Email Dispatcher States
+const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+const [trackingEmail, setTrackingEmail] = useState('');
+const [trackingSubject, setTrackingSubject] = useState('Payment Confirmed & Order Update');
+const [trackingMessage, setTrackingMessage] = useState('Your payment has been confirmed! Your items are currently being processed and will be dispatched shortly. They are on the way.');
+const [trackingItems, setTrackingItems] = useState<any[]>([]);
+const [selectedUserCart, setSelectedUserCart] = useState<string | null>(null);
+
+// Modals & Chatbot States
+const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+const [isChatOpen, setIsChatOpen] = useState(false);
+const [chatInput, setChatInput] = useState('');
+const [chatMessages, setChatMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([
+  { role: 'assistant', content: 'Hi! I am Darling Chatbot 🤖. How can I help you with your shopping today?' }
+]);
 
   const [broadcastSubject, setBroadcastSubject] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
@@ -433,9 +443,18 @@ const handleSendMessage = async () => {
     };
   }, [isInstalled]);
 
-  useEffect(() => {
+    useEffect(() => {
+    // 1. Save locally for the user
     localStorage.setItem('shop4everything_cart', JSON.stringify(cart));
-  }, [cart]);
+    
+    // 2. Secretly sync to the cloud for admins to monitor
+    if (currentUser && currentUser.email) {
+      supabase.from('store_users')
+        .update({ current_cart: cart })
+        .eq('email', currentUser.email)
+        .then();
+    }
+  }, [cart, currentUser]);
 
 // --- MOBILE HARDWARE BACK BUTTON INTERCEPTOR ---
   const anyModalOpen = isCartOpen || isDashboardOpen || isCheckoutModalOpen || isChatOpen || isUploadOpen || !!editingProduct || !!viewingProductImages || isLoginOpen;
@@ -764,21 +783,27 @@ const handleSendMessage = async () => {
 
   // --- CART ---
   const addToCart = (product: Product, customImage?: string, colorIndex?: number) => {
-    const targetImage = customImage || product.image;
-    const targetIndex = colorIndex !== undefined ? colorIndex : 1;
-    
-    setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id && item.selectedColorImage === targetImage);
-      if (existing) {
-        return prev.map(item => (item.product.id === product.id && item.selectedColorImage === targetImage) 
-          ? { ...item, quantity: item.quantity + 1 } 
-          : item
-        );
-      }
-      return [...prev, { product, quantity: 1, selectedColorImage: targetImage, selectedColorIndex: targetIndex }];
-    });
-    setIsCartOpen(true);
-  };
+  const targetImage = customImage || product.image;
+  const targetIndex = colorIndex !== undefined ? colorIndex : 1;
+  
+  setCart(prev => {
+    const existing = prev.find(item => item.product.id === product.id && item.selectedColorImage === targetImage);
+    if (existing) {
+      return prev.map(item => (item.product.id === product.id && item.selectedColorImage === targetImage) 
+        ? { ...item, quantity: item.quantity + 1, addedAt: new Date().toISOString() } 
+        : item
+      );
+    }
+    return [...prev, { 
+      product, 
+      quantity: 1, 
+      selectedColorImage: targetImage, 
+      selectedColorIndex: targetIndex, 
+      addedAt: new Date().toISOString() 
+    }];
+  });
+  setIsCartOpen(true);
+};
 
   const updateQuantity = (productId: number, delta: number) => {
     setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity: item.quantity + delta } : item).filter(i => i && i.quantity > 0) as CartItem[]);
@@ -803,6 +828,37 @@ const handleSendMessage = async () => {
   };
 
   // --- ADMIN SETTINGS & AUTOMATED BROADCAST ACTIONS ---
+ const openTrackingEmailModal = (email: string, items: any[]) => {
+    setTrackingEmail(email);
+    setTrackingItems(items);
+    setIsTrackingModalOpen(true);
+  };
+
+  const handleDispatchTrackingEmail = async () => {
+    if (!trackingEmail || !trackingMessage) return;
+
+    let itemsHtml = trackingItems.map(i => `• ${i.title || i.product?.title} (Qty: ${i.quantity})`).join('\n');
+    let fullMessage = `${trackingMessage}\n\n📦 **Your Items Included:**\n${itemsHtml}\n\nThank you for shopping with ${settings.storeName}!`;
+
+    try {
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: trackingEmail,
+          subject: trackingSubject,
+          message: fullMessage,
+          type: 'broadcast',
+          storeName: settings.storeName
+        })
+      });
+      alert(`Tracking email successfully dispatched to ${trackingEmail}!`);
+      setIsTrackingModalOpen(false);
+    } catch (err) {
+      alert("Failed to send tracking email.");
+    }
+  };
+
   const handleSaveSettings = async () => {
     if (!settings.id) {
       const { data } = await supabase.from('store_settings').insert([settings]).select().single();
@@ -882,7 +938,11 @@ const handleSendMessage = async () => {
     { id: 'policy', label: 'Terms & Return Policy', icon: '📜' },
     { id: 'account', label: currentUser ? 'Account & Logout' : 'Member Login', icon: currentUser ? '👤' : '🔐' },
     { id: 'founder', label: 'Contact Founder', icon: '👑' },
-    ...(isUserAdmin ? [{ id: 'customers', label: 'User Roles', icon: '👥' }, { id: 'settings', label: 'Global Settings', icon: '⚙️' }] : [])
+    ...(isUserAdmin ? [
+      { id: 'user_carts', label: 'Live User Carts', icon: '🕵️' }, 
+      { id: 'customers', label: 'User Roles', icon: '👥' }, 
+      { id: 'settings', label: 'Global Settings', icon: '⚙️' }
+    ] : [])
   ] as const;
 
   if (settings.maintenanceMode && !isUserAdmin) {
@@ -1180,38 +1240,96 @@ const handleSendMessage = async () => {
               )}
 
               {dashboardSection === 'orders' && (
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Current Cart</div>
-                  {cart.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '15px' }}>Your cart is empty.</p> : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
-                      {cart.map((item) => (
-                        <div key={item.product.id} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)' }}>
-                          <div style={{ fontWeight: '800' }}>{item.product.title}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Qty: {item.quantity} • {settings.currencySymbol}{(item.product.price * item.quantity).toLocaleString()}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+  <div>
+    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Current Cart</div>
+    {cart.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '15px' }}>Your cart is empty.</p> : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
+        {cart.map((item) => (
+          <div key={item.product.id} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)' }}>
+            <div style={{ fontWeight: '800' }}>{item.product.title}</div>
+            <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Qty: {item.quantity} • {settings.currencySymbol}{(item.product.price * item.quantity).toLocaleString()}</div>
+          </div>
+        ))}
+      </div>
+    )}
 
-                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#00f2fe', marginBottom: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>📦 Order History & Logs</div>
-                  {storeOrders.length === 0 ? (
-                    <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>No past orders recorded yet.</p>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
-                      {storeOrders
-                        .filter(o => isUserAdmin || o.user_email === currentUser?.email)
-                        .map((ord) => (
-                          <div key={ord.id} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(0,242,254,0.06)', border: '1px solid rgba(0,242,254,0.2)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#00f2fe' }}>
-                              <span>Order #{ord.id}</span>
-                              <span style={{ color: ord.status === 'Pending' ? '#ff3366' : '#25d366' }}>{ord.status}</span>
+    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#00f2fe', marginBottom: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>📦 Order History & Logs</div>
+    {storeOrders.length === 0 ? (
+      <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>No past orders recorded yet.</p>
+    ) : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+        {storeOrders
+          .filter(o => isUserAdmin || o.user_email === currentUser?.email)
+          .map((ord) => (
+            <div key={ord.id} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(0,242,254,0.06)', border: '1px solid rgba(0,242,254,0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#00f2fe' }}>
+                <span>Order #{ord.id}</span>
+                <span style={{ color: ord.status === 'Pending' ? '#ff3366' : '#25d366' }}>{ord.status}</span>
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '4px 0' }}>{new Date(ord.created_at).toLocaleString()} • {ord.user_email}</div>
+              <div style={{ fontWeight: '900', fontSize: '0.85rem', marginBottom: '10px' }}>Total: {settings.currencySymbol}{ord.grand_total.toLocaleString()}</div>
+              
+              {isUserAdmin && (
+                <button onClick={() => openTrackingEmailModal(ord.user_email, ord.items)} style={{ width: '100%', padding: '8px', borderRadius: '8px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', fontWeight: '900', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
+                  📧 Update Buyer / Dispatch Tracking Email
+                </button>
+              )}
+            </div>
+          ))}
+      </div>
+    )}
+  </div>
+)}
+
+{/* ===== LIVE USER CARTS (ADMIN ONLY) ===== */}
+{dashboardSection === 'user_carts' && isUserAdmin && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Live User Carts (Real-Time)</div>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '12px' }}>Tap a user to see exactly what they are adding to their cart right now.</p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {registeredUsers.map((u) => {
+                      const userCart = u.current_cart || [];
+                      const isExpanded = selectedUserCart === u.email;
+                      
+                      return (
+                        <div key={u.email} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: isExpanded ? '1px solid #00f2fe' : '1px solid transparent' }}>
+                          <div 
+                            onClick={() => setSelectedUserCart(isExpanded ? null : u.email)}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                          >
+                            <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{u.email}</div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: userCart.length > 0 ? '#25d366' : '#94a3b8' }}>
+                              {userCart.length} Items
                             </div>
-                            <div style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '4px 0' }}>{new Date(ord.created_at).toLocaleDateString()} • {ord.user_email}</div>
-                            <div style={{ fontWeight: '900', fontSize: '0.85rem' }}>Total: {settings.currencySymbol}{ord.grand_total.toLocaleString()}</div>
                           </div>
-                      ))}
-                    </div>
-                  )}
+
+                          {isExpanded && (
+                            <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>
+                              {userCart.length === 0 ? (
+                                <p style={{ fontSize: '0.75rem', color: '#ff3366', margin: 0 }}>This user's cart is currently empty.</p>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  {userCart.map((item, idx) => (
+                                    <div key={idx} style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px' }}>
+                                      <div style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>{item.product.title} (Qty: {item.quantity})</div>
+                                      <div style={{ fontSize: '0.65rem', color: '#00f2fe', marginTop: '4px' }}>
+                                        ⏱️ Added: {item.addedAt ? new Date(item.addedAt).toLocaleString() : 'Just now'}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  
+                                  <button onClick={() => openTrackingEmailModal(u.email, userCart)} style={{ marginTop: '8px', width: '100%', padding: '8px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
+                                    📧 Email User About These Items
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -1421,6 +1539,51 @@ const handleSendMessage = async () => {
                 </button>
                 <a href={generateWhatsAppLink(settings.backupPhone)} target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.06)', color: isDark ? '#fff' : '#000', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, padding: '10px', borderRadius: '30px', textDecoration: 'none', textAlign: 'center', fontWeight: '800', fontSize: '0.8rem', pointerEvents: cart.length === 0 ? 'none' : 'auto', opacity: cart.length === 0 ? 0.5 : 1 }}>📞 Backup Line ({settings.backupPhone}) →</a>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ADMIN TRACKING & DISPATCH EMAIL MODAL ===== */}
+      {isTrackingModalOpen && isUserAdmin && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div className="glass-card" style={{ maxWidth: '460px', width: '100%', padding: '24px', background: isDark ? '#0f172a' : '#ffffff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#00f2fe' }}>📧 Dispatch Order Status</h3>
+              <button onClick={() => setIsTrackingModalOpen(false)} style={{ background: 'none', border: 'none', color: isDark ? '#fff' : '#000', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>To: Buyer Email</label>
+                <input type="text" readOnly value={trackingEmail} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }} />
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>Subject</label>
+                <input type="text" value={trackingSubject} onChange={(e) => setTrackingSubject(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(0,0,0,0.4)', border: '1px solid #00f2fe', color: '#fff' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>Message Body (Editable)</label>
+                <textarea rows={4} value={trackingMessage} onChange={(e) => setTrackingMessage(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(0,0,0,0.4)', border: '1px solid #00f2fe', color: '#fff' }} />
+              </div>
+
+              <div style={{ padding: '12px', background: 'rgba(255,51,106,0.1)', borderRadius: '8px', border: '1px solid rgba(255,51,106,0.3)' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ff3366', marginBottom: '6px' }}>Items Attached to this Email:</div>
+                {trackingItems.map((item, idx) => (
+                  <div key={idx} style={{ fontSize: '0.8rem', color: '#fff', marginBottom: '4px' }}>
+                    • {item.title || item.product?.title} (Qty: {item.quantity})
+                  </div>
+                ))}
+              </div>
+
+              <button 
+                onClick={handleDispatchTrackingEmail}
+                style={{ width: '100%', padding: '14px', borderRadius: '30px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', fontWeight: '900', border: 'none', cursor: 'pointer', marginTop: '10px', boxShadow: '0 4px 15px rgba(0,242,254,0.3)' }}
+              >
+                🚀 Dispatch Personal Update Now
+              </button>
             </div>
           </div>
         </div>
