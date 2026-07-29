@@ -169,7 +169,7 @@ export default function Home() {
   // UI States
 const [isCartOpen, setIsCartOpen] = useState(false);
 const [isDashboardOpen, setIsDashboardOpen] = useState(false);
-const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'customers' | 'founder' | 'broadcast' | 'settings' | 'account' | 'policy'>('overview');
+const [dashboardSection, setDashboardSection] = useState<'overview' | 'shop' | 'orders' | 'user_carts' | 'customers' | 'founder' | 'broadcast' | 'settings' | 'account' | 'policy'>('overview');
 
 // Tracking Email Dispatcher States
 const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
