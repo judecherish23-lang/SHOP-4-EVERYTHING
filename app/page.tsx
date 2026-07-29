@@ -1076,7 +1076,6 @@ const handleSendMessage = async () => {
   }}>
     <span>🕒</span> {currentTime}
   </div>
-</div>
 
               <button onClick={() => setIsCartOpen(true)} style={{ background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '30px', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>🛒 Cart</span>
