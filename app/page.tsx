@@ -183,6 +183,7 @@ const [selectedUserCart, setSelectedUserCart] = useState<string | null>(null);
 const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 const [isChatOpen, setIsChatOpen] = useState(false);
 const [chatInput, setChatInput] = useState('');
+const [currentTime, setCurrentTime] = useState<string>('');
 const [chatMessages, setChatMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([
   { role: 'assistant', content: 'Hi! I am Darling Chatbot 🤖. How can I help you with your shopping today?' }
 ]);
@@ -245,6 +246,28 @@ const [selectedVariantImage, setSelectedVariantImage] = useState<string | null>(
   const [editDesc, setEditDesc] = useState('');
   const [editImageFile, setEditImageFile] = useState<string>('');
   const [editImagesList, setEditImagesList] = useState<string[]>([]);
+
+  // Live clock
+useEffect(() => {
+  const updateClock = () => {
+    const now = new Date();
+    const formatted = now.toLocaleString('en-NG', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+      timeZone: 'Africa/Lagos'
+    });
+    setCurrentTime(formatted);
+  };
+  updateClock();
+  const interval = setInterval(updateClock, 1000);
+  return () => clearInterval(interval);
+}, []);
 
 const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
@@ -834,30 +857,60 @@ const handleSendMessage = async () => {
     setIsTrackingModalOpen(true);
   };
 
-  const handleDispatchTrackingEmail = async () => {
-    if (!trackingEmail || !trackingMessage) return;
+ const handleDispatchTrackingEmail = async () => {
+  if (!trackingEmail || !trackingMessage) return;
 
-    let itemsHtml = trackingItems.map(i => `• ${i.title || i.product?.title} (Qty: ${i.quantity})`).join('\n');
-    let fullMessage = `${trackingMessage}\n\n📦 **Your Items Included:**\n${itemsHtml}\n\nThank you for shopping with ${settings.storeName}!`;
+  // Build an HTML list of items with images
+  const itemsHtml = trackingItems.map(item => {
+    const imageUrl = item.image || item.selectedColorImage || item.product?.image || '';
+    const title = item.title || item.product?.title || 'Item';
+    return `
+      <tr>
+        <td style="padding: 8px; vertical-align: top;">
+          <img src="${imageUrl}" alt="${title}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;" />
+        </td>
+        <td style="padding: 8px; color: #f8fafc; font-size: 14px;">
+          ${title} (Qty: ${item.quantity})
+        </td>
+      </tr>
+    `;
+  }).join('');
 
-    try {
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: trackingEmail,
-          subject: trackingSubject,
-          message: fullMessage,
-          type: 'broadcast',
-          storeName: settings.storeName
-        })
-      });
-      alert(`Tracking email successfully dispatched to ${trackingEmail}!`);
+  const fullHtml = `
+    <div style="background-color: #1a1a1a; color: #f8fafc; font-family: sans-serif; padding: 20px;">
+      <h2 style="color: #ff3366;">${trackingSubject}</h2>
+      <p>${trackingMessage.replace(/\n/g, '<br/>')}</p>
+      <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+        ${itemsHtml}
+      </table>
+      <p style="margin-top: 20px;">Thank you for shopping with ${settings.storeName}!</p>
+    </div>
+  `;
+
+  try {
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: trackingEmail,
+        subject: trackingSubject,
+        message: fullHtml,          // now passing HTML
+        type: 'tracking',           // differentiate from broadcast if needed
+        storeName: settings.storeName
+      })
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      alert(`✅ Tracking email successfully dispatched to ${trackingEmail}!`);
       setIsTrackingModalOpen(false);
-    } catch (err) {
-      alert("Failed to send tracking email.");
+    } else {
+      alert(`❌ Failed to send email: ${data.error || 'Unknown error'}`);
     }
-  };
+  } catch (err: any) {
+    alert(`❌ Network error: ${err.message}`);
+  }
+};
 
   const handleSaveSettings = async () => {
     if (!settings.id) {
@@ -1007,6 +1060,23 @@ const handleSendMessage = async () => {
               {canUserUpload && (
                 <button onClick={() => setIsUploadOpen(true)} style={{ background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', border: 'none', padding: '8px 14px', borderRadius: '30px', fontWeight: '900', fontSize: '0.78rem', cursor: 'pointer' }}>➕ Upload Item</button>
               )}
+
+{/* ADD THE CLOCK HERE */}
+  <div style={{ 
+    fontSize: '0.7rem', 
+    fontWeight: '700', 
+    color: '#00f2fe', 
+    background: 'rgba(0,242,254,0.1)', 
+    padding: '4px 10px', 
+    borderRadius: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    whiteSpace: 'nowrap'
+  }}>
+    <span>🕒</span> {currentTime}
+  </div>
+</div>
 
               <button onClick={() => setIsCartOpen(true)} style={{ background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '30px', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>🛒 Cart</span>
@@ -1283,55 +1353,62 @@ const handleSendMessage = async () => {
 
 {/* ===== LIVE USER CARTS (ADMIN ONLY) ===== */}
 {dashboardSection === 'user_carts' && isUserAdmin && (
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Live User Carts (Real-Time)</div>
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '12px' }}>Tap a user to see exactly what they are adding to their cart right now.</p>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {registeredUsers.map((u) => {
-                      const userCart = u.current_cart || [];
-                      const isExpanded = selectedUserCart === u.email;
-                      
-                      return (
-                        <div key={u.email} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: isExpanded ? '1px solid #00f2fe' : '1px solid transparent' }}>
-                          <div 
-                            onClick={() => setSelectedUserCart(isExpanded ? null : u.email)}
-                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-                          >
-                            <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{u.email}</div>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: userCart.length > 0 ? '#25d366' : '#94a3b8' }}>
-                              {userCart.length} Items
-                            </div>
-                          </div>
+  <div>
+    <div style={{ fontSize: '0.8rem', fontWeight: '900', color: '#ff3366', marginBottom: '8px' }}>Live User Carts (Real-Time)</div>
+    <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '12px' }}>Tap a user to see exactly what they are adding to their cart right now.</p>
+    
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {registeredUsers.map((u) => {
+        const userCart = u.current_cart || [];
+        const isExpanded = selectedUserCart === u.email;
+        
+        return (
+          <div key={u.email} style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: isExpanded ? '1px solid #00f2fe' : '1px solid transparent' }}>
+            <div 
+              onClick={() => setSelectedUserCart(isExpanded ? null : u.email)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+            >
+              <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{u.email}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: userCart.length > 0 ? '#25d366' : '#94a3b8' }}>
+                {userCart.length} Items
+              </div>
+            </div>
 
-                          {isExpanded && (
-                            <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>
-                              {userCart.length === 0 ? (
-                                <p style={{ fontSize: '0.75rem', color: '#ff3366', margin: 0 }}>This user's cart is currently empty.</p>
-                              ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                  {userCart.map((item, idx) => (
-                                    <div key={idx} style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px' }}>
-                                      <div style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>{item.product.title} (Qty: {item.quantity})</div>
-                                      <div style={{ fontSize: '0.65rem', color: '#00f2fe', marginTop: '4px' }}>
-                                        ⏱️ Added: {item.addedAt ? new Date(item.addedAt).toLocaleString() : 'Just now'}
-                                      </div>
-                                    </div>
-                                  ))}
-                                  
-                                  <button onClick={() => openTrackingEmailModal(u.email, userCart)} style={{ marginTop: '8px', width: '100%', padding: '8px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
-                                    📧 Email User About These Items
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
+            {isExpanded && (
+              <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px' }}>
+                {userCart.length === 0 ? (
+                  <p style={{ fontSize: '0.75rem', color: '#ff3366', margin: 0 }}>This user's cart is currently empty.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {userCart.map((item, idx) => (
+                      <div key={idx} style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <img 
+                          src={item.selectedColorImage || item.product.image} 
+                          alt={item.product.title}
+                          style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.2)' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>{item.product.title} (Qty: {item.quantity})</div>
+                          <div style={{ fontSize: '0.65rem', color: '#00f2fe', marginTop: '4px' }}>
+                            ⏱️ Added: {item.addedAt ? new Date(item.addedAt).toLocaleString() : 'Just now'}
+                          </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
+                    
+                    <button onClick={() => openTrackingEmailModal(u.email, userCart)} style={{ marginTop: '8px', width: '100%', padding: '8px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
+                      📧 Email User About These Items
+                    </button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
 
               {dashboardSection === 'broadcast' && (
                 <div>
