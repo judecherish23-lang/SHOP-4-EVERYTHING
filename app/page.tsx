@@ -2357,22 +2357,6 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
         </div>
       )}
 
-  {/* ===== MOBILE BOTTOM NAV ===== */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 80, background: '#0f172a', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '8px 0' }}>
-        <Link href="/" style={{ color: '#fff', textDecoration: 'none', textAlign: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>
-          <div style={{ fontSize: '1.2rem' }}>🏠</div> Home
-        </Link>
-        <button onClick={() => setIsDashboardOpen(true)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.2rem' }}>☰</div> Menu
-        </button>
-        <button onClick={() => setIsCartOpen(true)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.2rem' }}>🛒</div> Cart
-        </button>
-        <Link href="/track-order" style={{ color: '#fff', textDecoration: 'none', textAlign: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>
-          <div style={{ fontSize: '1.2rem' }}>📦</div> Track
-        </Link>
-      </div>
-
             {/* ===== FOOTER ===== */}
       <footer style={{
         maxWidth: '1200px',
