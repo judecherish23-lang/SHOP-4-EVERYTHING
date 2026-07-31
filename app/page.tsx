@@ -171,6 +171,8 @@ const [reviews, setReviews] = useState<Record<number, any[]>>({});
   const [reviewProductId, setReviewProductId] = useState<number | null>(null);
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState('');
+  const [viewingReviewProductId, setViewingReviewProductId] = useState<number | null>(null);
+
 const [wishlist, setWishlist] = useState<Product[]>([]);
 
   const [storeOrders, setStoreOrders] = useState<any[]>([]);
@@ -1458,9 +1460,13 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
                     <p style={{ fontSize: '0.8rem', color: isDark ? '#94a3b8' : '#64748b', margin: '0 0 12px 0', lineHeight: '1.4' }}>{product.description}</p>
                     
                     {reviews[product.id] && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                      <div 
+                        onClick={() => setViewingReviewProductId(product.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', cursor: 'pointer' }}
+                        title="Click to read reviews"
+                      >
                         <span style={{ color: '#FFD700' }}>{'★'.repeat(Math.round(reviews[product.id].reduce((acc: number, r: any) => acc + r.rating, 0) / reviews[product.id].length))}</span>
-                        <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>({reviews[product.id].length})</span>
+                        <span style={{ fontSize: '0.7rem', color: '#00f2fe', textDecoration: 'underline' }}>({reviews[product.id].length} Reviews)</span>
                       </div>
                     )}
                     {currentUser && (
@@ -2282,6 +2288,37 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
           💬
         </button>
       </div>
+
+      {/* ===== READ REVIEWS MODAL ===== */}
+      {viewingReviewProductId !== null && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 155, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-card" style={{ background: '#0f172a', padding: '24px', borderRadius: '12px', maxWidth: '500px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#00f2fe' }}>Customer Reviews</h3>
+              <button onClick={() => setViewingReviewProductId(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px' }}>
+              {(!reviews[viewingReviewProductId] || reviews[viewingReviewProductId].length === 0) ? (
+                <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No reviews yet.</p>
+              ) : (
+                reviews[viewingReviewProductId].map((r: any, idx: number) => (
+                  <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#cbd5e1' }}>{r.user_email.split('@')[0]}***</span>
+                      <span style={{ color: '#FFD700', fontSize: '0.8rem' }}>{'★'.repeat(r.rating)}</span>
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: '#fff', margin: 0, lineHeight: '1.4' }}>{r.comment}</p>
+                    <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '6px', textAlign: 'right' }}>
+                      {new Date(r.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== REVIEW MODAL ===== */}
       {showReviewModal && (
