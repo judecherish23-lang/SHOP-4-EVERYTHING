@@ -191,6 +191,9 @@ const [chatMessages, setChatMessages] = useState<{role: 'user' | 'assistant', co
   const [broadcastSubject, setBroadcastSubject] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastStatus, setBroadcastStatus] = useState('');
+const [tickerText, setTickerText] = useState('🔥 New Arrivals Weekly! • Free Delivery on Orders Above ₦50,000 • Quality Guaranteed • Shop Now!');
+const [isEditingTicker, setIsEditingTicker] = useState(false);
+const [tickerEditText, setTickerEditText] = useState('');
 
   const isDark = true;
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -356,6 +359,10 @@ const handleSendMessage = async () => {
         setProducts(prodData as Product[]);
         localStorage.setItem('shop4everything_products_cache', JSON.stringify(prodData));
       }
+
+     const { data: tickerData } = await supabase.from('store_settings').select('ticker_text').limit(1).single();
+if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text); 
+
       const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
       if (setData) setSettings(setData as StoreSettings);
  
@@ -1028,7 +1035,13 @@ const handleSendMessage = async () => {
 
   return (
     <div style={{ minHeight: '100vh', background: isDark ? '#090d16' : '#f8fafc', color: isDark ? '#f8fafc' : '#0f172a', transition: 'all 0.3s' }}>
-      
+          <style jsx>{`
+      @keyframes scroll-left {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-100%); }
+      }
+    `}</style>
+
       {/* ===== HEADER NAVIGATION (CENTERED) ===== */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 50,
@@ -1155,6 +1168,103 @@ const handleSendMessage = async () => {
           <p style={{ maxWidth: '640px', margin: '0 auto 20px auto', fontSize: '0.95rem', color: isDark ? '#94a3b8' : '#64748b', lineHeight: '1.6' }}>{settings.storeTagline}</p>
         </div>
       </section>
+
+      {/* ===== LED SCROLLING TICKER ===== */}
+<section style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+  <div style={{
+    background: 'linear-gradient(90deg, #000000, #1a1a1a, #000000)',
+    borderRadius: '8px',
+    padding: '8px 16px',
+    border: '1px solid rgba(255,51,106,0.3)',
+    overflow: 'hidden',
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  }}>
+    <span style={{
+      background: '#ff3366',
+      color: '#fff',
+      padding: '4px 10px',
+      borderRadius: '12px',
+      fontSize: '0.65rem',
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      whiteSpace: 'nowrap',
+      zIndex: 2
+    }}>📣 NEWS</span>
+    
+    <div style={{
+      flex: 1,
+      overflow: 'hidden',
+      position: 'relative'
+    }}>
+      <div style={{
+        display: 'inline-block',
+        whiteSpace: 'nowrap',
+        animation: 'scroll-left 20s linear infinite',
+        color: '#00f2fe',
+        fontSize: '0.82rem',
+        fontWeight: '700',
+        paddingLeft: '100%'
+      }}>
+        {tickerText}
+      </div>
+    </div>
+
+    {isUserAdmin && (
+      <button 
+        onClick={() => {
+          setTickerEditText(tickerText);
+          setIsEditingTicker(true);
+        }}
+        style={{
+          background: 'rgba(255,255,255,0.1)',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.2)',
+          padding: '4px 8px',
+          borderRadius: '6px',
+          fontSize: '0.65rem',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          zIndex: 2
+        }}
+      >
+        ✏️ Edit
+      </button>
+    )}
+  </div>
+</section>
+
+{/* Ticker Edit Modal (Admin Only) */}
+{isEditingTicker && isUserAdmin && (
+  <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+    <div className="glass-card" style={{ maxWidth: '450px', width: '100%', padding: '24px', background: '#0f172a' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#00f2fe' }}>✏️ Edit Ticker Text</h3>
+        <button onClick={() => setIsEditingTicker(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+      </div>
+      <textarea 
+        value={tickerEditText} 
+        onChange={(e) => setTickerEditText(e.target.value)}
+        rows={3}
+        style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(0,0,0,0.4)', border: '1px solid #00f2fe', color: '#fff' }}
+      />
+      <button 
+        onClick={async () => {
+          setTickerText(tickerEditText);
+          setIsEditingTicker(false);
+          // Save to Supabase
+          await supabase.from('store_settings').upsert({ id: settings.id || 1, ticker_text: tickerEditText });
+        }}
+        style={{ width: '100%', marginTop: '12px', padding: '10px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer' }}
+      >
+        💾 Save Ticker
+      </button>
+    </div>
+  </div>
+)}
 
       {activeBroadcast && (
         <section style={{ maxWidth: '1200px', margin: '15px auto 0 auto', padding: '0 20px' }}>
@@ -2073,6 +2183,24 @@ const handleSendMessage = async () => {
           </div>
         </div>
       )}
+
+            {/* ===== FOOTER ===== */}
+      <footer style={{
+        maxWidth: '1200px',
+        margin: '40px auto 0 auto',
+        padding: '20px',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        textAlign: 'center'
+      }}>
+        <p style={{
+          fontSize: '0.75rem',
+          color: '#64748b',
+          margin: 0,
+          letterSpacing: '0.5px'
+        }}>
+          © {new Date().getFullYear()} {settings.storeName} • Darlingtina Jude. All Rights Reserved.
+        </p>
+      </footer>
     </div>
   );
 }
