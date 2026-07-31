@@ -390,12 +390,26 @@ const handleSendMessage = async () => {
         localStorage.setItem('shop4everything_products_cache', JSON.stringify(prodData));
       }
 
-     const { data: tickerData } = await supabase.from('store_settings').select('ticker_text').limit(1).single();
-if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text); 
+      // Ensure hardcoded admins always exist in the database table
+      for (const adminEmail of adminEmails) {
+        const { data: foundAdmin } = await supabase.from('store_users').select('*').eq('email', adminEmail).maybeSingle();
+        if (!foundAdmin) {
+          await supabase.from('store_users').upsert([{
+            email: adminEmail,
+            role: 'admin',
+            isEligibleToUpload: true
+          }], { onConflict: 'email' });
+        }
+      }
 
-      const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
-      if (setData) setSettings(setData as StoreSettings);
- 
+    const { data: setData } = await supabase.from('store_settings').select('*').limit(1).single();
+      if (setData) {
+        setSettings(setData as StoreSettings);
+        if (setData.ticker_text) {
+          setTickerText(setData.ticker_text);
+        }
+      }
+
       const { data: bcData } = await supabase.from('broadcasts').select('*').order('created_at', { ascending: false });
       if (bcData && bcData.length > 0) {
         setBroadcasts(bcData as BroadcastEntry[]);
@@ -1325,8 +1339,9 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
         onClick={async () => {
           setTickerText(tickerEditText);
           setIsEditingTicker(false);
-          // Save to Supabase
-          await supabase.from('store_settings').upsert({ id: settings.id || 1, ticker_text: tickerEditText });
+          const updatedSettings = { ...settings, ticker_text: tickerEditText };
+          setSettings(updatedSettings);
+          await supabase.from('store_settings').upsert([updatedSettings]);
         }}
         style={{ width: '100%', marginTop: '12px', padding: '10px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer' }}
       >
