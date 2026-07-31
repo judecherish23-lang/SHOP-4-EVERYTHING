@@ -2,6 +2,8 @@
 
 import { useState, useEffect, ChangeEvent } from 'react';
 import { supabase } from '../lib/supabase';
+import Link from 'next/link';
+import Head from 'next/head';
 
 // --- CLIENT-SIDE IMAGE COMPRESSOR UTILITY ---
 const compressImageFile = (file: File, quality: number = 0.7, maxWidth: number = 1000): Promise<string> => {
@@ -163,9 +165,35 @@ export default function Home() {
 
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [sortOrder, setSortOrder] = useState('default');
+const [reviews, setReviews] = useState<Record<number, any[]>>({});
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewProductId, setReviewProductId] = useState<number | null>(null);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+const [wishlist, setWishlist] = useState<Product[]>([]);
+
   const [storeOrders, setStoreOrders] = useState<any[]>([]);
- 
+ const [totalVisits, setTotalVisits] = useState(0);
+
+  useEffect(() => {
+    const fetchVisits = async () => {
+      const { count } = await supabase.from('page_views').select('*', { count: 'exact', head: true });
+      if (count !== null) setTotalVisits(count);
+    };
+    fetchVisits();
+  }, []);
+
+  useEffect(() => {
+    const logView = async () => {
+      await supabase.from('page_views').insert({
+        page: window.location.pathname,
+        user_email: currentUser?.email || null
+      });
+    };
+    logView();
+  }, []);
+
   // UI States
 const [isCartOpen, setIsCartOpen] = useState(false);
 const [isDashboardOpen, setIsDashboardOpen] = useState(false);
@@ -377,6 +405,16 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
 
       const { data: ordData } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
       if (ordData) setStoreOrders(ordData);
+
+      const { data: revData } = await supabase.from('reviews').select('*');
+      if (revData) {
+        const grouped: any = {};
+        revData.forEach((r: any) => {
+          if (!grouped[r.product_id]) grouped[r.product_id] = [];
+          grouped[r.product_id].push(r);
+        });
+        setReviews(grouped);
+      }
     };
 
     fetchGlobalData();
@@ -639,6 +677,10 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
       }
 
       alert(`Welcome back, ${emailClean}!`);
+      const { data: userData } = await supabase.from('store_users').select('wishlist').eq('email', emailClean).single();
+      if (userData?.wishlist) {
+        setWishlist(userData.wishlist);
+      }
     }
 
     setCurrentUser(loggedUser);
@@ -981,11 +1023,26 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
   // --- FILTERS & VARS ---
   const categories = ['All', 'Fashion & Clothings', 'Bags & Footwear', 'Female Beauty & Perfumes', 'Home & Garden Decor', 'Kitchen & Appliances', 'Electronics & Gadgets'];
   
-  const filteredProducts = products.filter(p => {
-    const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredProducts = (() => {
+    let filtered = products.filter(p => {
+      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+      const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+
+    switch (sortOrder) {
+      case 'price-asc':
+        filtered.sort((a, b) => a.price - b.price);
+        break;
+      case 'price-desc':
+        filtered.sort((a, b) => b.price - a.price);
+        break;
+      case 'newest':
+        filtered.sort((a, b) => b.id - a.id);
+        break;
+    }
+    return filtered;
+  })();
 
   const canUserUpload = currentUser?.role === 'admin' || currentUser?.isEligibleToUpload === true;
   const isUserAdmin = currentUser?.role === 'admin';
@@ -1035,6 +1092,14 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
 
   return (
     <div style={{ minHeight: '100vh', background: isDark ? '#090d16' : '#f8fafc', color: isDark ? '#f8fafc' : '#0f172a', transition: 'all 0.3s' }}>
+      <Head>
+        <title>{settings.storeName} - {settings.storeTagline}</title>
+        <meta name="description" content={settings.storeTagline} />
+        <meta property="og:title" content={settings.storeName} />
+        <meta property="og:description" content={settings.storeTagline} />
+        <meta property="og:image" content={settings.storeLogoUrl || '/darlingtina.jpg'} />
+        <meta name="twitter:card" content="summary_large_image" />
+      </Head>
           <style jsx>{`
       @keyframes scroll-left {
         0% { transform: translateX(0); }
@@ -1094,6 +1159,9 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
                 <span>🛒 Cart</span>
                 <span style={{ background: '#fff', color: '#ff3366', borderRadius: '50%', padding: '2px 8px', fontSize: '0.78rem', fontWeight: '900' }}>{totalCartCount}</span>
               </button>
+              <Link href="/track-order" style={{ fontSize: '0.75rem', color: '#00f2fe', textDecoration: 'underline', marginLeft: '8px', fontWeight: 'bold' }}>
+                Track Order
+              </Link>
             </div>
           </div>
 
@@ -1282,6 +1350,18 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
           {categories.map(cat => (
             <button key={cat} onClick={() => setSelectedCategory(cat)} style={{ padding: '8px 18px', borderRadius: '30px', border: selectedCategory === cat ? 'none' : `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: selectedCategory === cat ? '#ff3366' : isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', color: selectedCategory === cat ? '#fff' : isDark ? '#fff' : '#000', fontWeight: '800', fontSize: '0.82rem', cursor: 'pointer', transition: 'all 0.2s ease' }}>{cat}</button>
           ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              style={{ padding: '6px 12px', borderRadius: '20px', background: '#1a1a1a', color: '#fff', border: '1px solid #333', fontSize: '0.8rem', outline: 'none' }}
+            >
+              <option value="default">Sort by</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="newest">Newest First</option>
+            </select>
+          </div>
         </div>
       </section>
 
@@ -1322,6 +1402,23 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
                 >
                   <img src={product.image} alt={product.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   <span style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', color: '#fff', padding: '4px 10px', borderRadius: '14px', fontSize: '0.72rem', fontWeight: '800' }}>{product.tag}</span>
+<button
+                    onClick={async (e) => {
+                      e.stopPropagation(); // Added this single line so clicking the heart doesn't open the image viewer
+                      if (!currentUser) { alert('Please login to save items'); return; }
+                      const isInWishlist = wishlist.find(w => w.id === product.id);
+                      let newWishlist;
+                      if (isInWishlist) {
+                        newWishlist = wishlist.filter(w => w.id !== product.id);
+                      } else {
+                        newWishlist = [...wishlist, product];
+                      }
+                      setWishlist(newWishlist);
+                      await supabase.from('store_users').update({ wishlist: newWishlist }).eq('email', currentUser.email);
+                    }}
+                    style={{ background: 'none', border: 'none', color: wishlist.find(w => w.id === product.id) ? '#ff3366' : '#fff', fontSize: '1.2rem', cursor: 'pointer', position: 'absolute', top: '10px', right: '50px', zIndex: 5 }}>
+                    {wishlist.find(w => w.id === product.id) ? '❤️' : '🤍'}
+                  </button>
 
                   {/* Multi-Image Color Variant Indicator (...) */}
                   {product.images && product.images.length > 1 && (
@@ -1356,9 +1453,21 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
                 </div>
                 <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
                   <div>
-                    <span style={{ fontSize: '0.72rem', color: '#00f2fe', fontWeight: '800', textTransform: 'uppercase' }}>{product.category}</span>
+                   <span style={{ fontSize: '0.72rem', color: '#00f2fe', fontWeight: '800', textTransform: 'uppercase' }}>{product.category}</span>
                     <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: '4px 0 6px 0', lineHeight: '1.3' }}>{product.title}</h3>
                     <p style={{ fontSize: '0.8rem', color: isDark ? '#94a3b8' : '#64748b', margin: '0 0 12px 0', lineHeight: '1.4' }}>{product.description}</p>
+                    
+                    {reviews[product.id] && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                        <span style={{ color: '#FFD700' }}>{'★'.repeat(Math.round(reviews[product.id].reduce((acc: number, r: any) => acc + r.rating, 0) / reviews[product.id].length))}</span>
+                        <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>({reviews[product.id].length})</span>
+                      </div>
+                    )}
+                    {currentUser && (
+                      <button onClick={() => { setReviewProductId(product.id); setShowReviewModal(true); }} style={{ background: '#ff3366', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', marginTop: '8px', alignSelf: 'flex-start' }}>
+                        ⭐ Review
+                      </button>
+                    )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, paddingTop: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
@@ -1404,6 +1513,7 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
                     <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(37,211,102,0.12)' }}><strong>{registeredUsers.length}</strong> total registered users</div>
                     <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(255,51,106,0.12)' }}><strong>{totalCartCount}</strong> items in your cart</div>
                   </div>
+                  <div style={{ padding: '10px', borderRadius: '12px', background: 'rgba(0,242,254,0.12)' }}><strong>{totalVisits}</strong> page views</div>
                 </div>
               )}
 
@@ -1449,9 +1559,34 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
               <div style={{ fontWeight: '900', fontSize: '0.85rem', marginBottom: '10px' }}>Total: {settings.currencySymbol}{ord.grand_total.toLocaleString()}</div>
               
               {isUserAdmin && (
-                <button onClick={() => openTrackingEmailModal(ord.user_email, ord.items)} style={{ width: '100%', padding: '8px', borderRadius: '8px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', fontWeight: '900', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
-                  📧 Update Buyer / Dispatch Tracking Email
-                </button>
+                <>
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                    <select
+                      value={ord.status}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value;
+                        await supabase.from('orders').update({ status: newStatus }).eq('id', ord.id);
+                        setStoreOrders(prev => prev.map(o => o.id === ord.id ? { ...o, status: newStatus } : o));
+                      }}
+                      style={{ padding: '4px 8px', borderRadius: '6px', background: '#000', color: '#fff', border: '1px solid #333' }}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Processing">Processing</option>
+                      <option value="Dispatched">Dispatched</option>
+                      <option value="Delivered">Delivered</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                    <button
+                      onClick={() => window.print()}
+                      style={{ padding: '4px 8px', borderRadius: '6px', background: '#00f2fe', color: '#000', border: 'none', fontWeight: 'bold' }}
+                    >
+                      🖨️ Print
+                    </button>
+                  </div>
+                  <button onClick={() => openTrackingEmailModal(ord.user_email, ord.items)} style={{ width: '100%', padding: '8px', borderRadius: '8px', background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', fontWeight: '900', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
+                    📧 Update Buyer / Dispatch Tracking Email
+                  </button>
+                </>
               )}
             </div>
           ))}
@@ -2148,6 +2283,44 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
         </button>
       </div>
 
+      {/* ===== REVIEW MODAL ===== */}
+      {showReviewModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-card" style={{ background: '#0f172a', padding: '24px', borderRadius: '12px', maxWidth: '400px', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, color: '#00f2fe' }}>Leave a Review</h3>
+              <button onClick={() => setShowReviewModal(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <select value={newRating} onChange={e => setNewRating(Number(e.target.value))} style={{ width: '100%', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}>
+              {[5,4,3,2,1].map(r => <option key={r} value={r}>{r} Star{r>1?'s':''}</option>)}
+            </select>
+            
+            <textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Your comment..." rows={3} style={{ width: '100%', marginTop: '12px', padding: '10px', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }} />
+            
+            <button onClick={async () => {
+              if (reviewProductId && currentUser) {
+                await supabase.from('reviews').insert({ product_id: reviewProductId, user_email: currentUser.email, rating: newRating, comment: newComment });
+                // Refresh reviews locally
+                const { data: newRev } = await supabase.from('reviews').select('*');
+                if (newRev) {
+                  const grouped: any = {};
+                  newRev.forEach((r: any) => {
+                    if (!grouped[r.product_id]) grouped[r.product_id] = [];
+                    grouped[r.product_id].push(r);
+                  });
+                  setReviews(grouped);
+                }
+                setShowReviewModal(false);
+                setNewComment('');
+              }
+            }} style={{ background: '#ff3366', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', marginTop: '12px', width: '100%', fontWeight: 'bold', cursor: 'pointer' }}>
+              Submit Review
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ===== DARLING CHATBOT MODAL ===== */}
       {isChatOpen && (
         <div style={{ position: 'fixed', bottom: '90px', right: '20px', zIndex: 100, width: '340px', maxWidth: 'calc(100vw - 40px)', height: '420px', background: isDark ? '#0f172a' : '#ffffff', borderRadius: '20px', boxShadow: '0 10px 40px rgba(0,0,0,0.6)', border: '1px solid rgba(0,242,254,0.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -2183,6 +2356,22 @@ if (tickerData?.ticker_text) setTickerText(tickerData.ticker_text);
           </div>
         </div>
       )}
+
+  {/* ===== MOBILE BOTTOM NAV ===== */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 80, background: '#0f172a', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '8px 0' }}>
+        <Link href="/" style={{ color: '#fff', textDecoration: 'none', textAlign: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>
+          <div style={{ fontSize: '1.2rem' }}>🏠</div> Home
+        </Link>
+        <button onClick={() => setIsDashboardOpen(true)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center' }}>
+          <div style={{ fontSize: '1.2rem' }}>☰</div> Menu
+        </button>
+        <button onClick={() => setIsCartOpen(true)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center' }}>
+          <div style={{ fontSize: '1.2rem' }}>🛒</div> Cart
+        </button>
+        <Link href="/track-order" style={{ color: '#fff', textDecoration: 'none', textAlign: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>
+          <div style={{ fontSize: '1.2rem' }}>📦</div> Track
+        </Link>
+      </div>
 
             {/* ===== FOOTER ===== */}
       <footer style={{
