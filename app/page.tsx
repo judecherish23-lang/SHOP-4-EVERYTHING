@@ -1135,14 +1135,17 @@ const handleSendMessage = async () => {
       }
     `}</style>
 
-      {/* ===== HEADER NAVIGATION (CENTERED) ===== */}
+      {/* ===== HEADER NAVIGATION ===== */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 50,
         background: isDark ? 'rgba(9, 13, 22, 0.88)' : 'rgba(248, 250, 252, 0.88)',
         backdropFilter: 'blur(20px)', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, padding: '12px 20px',
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '10px' }}>
           
+          {/* Empty spacer on the left to balance the grid */}
+          <div></div>
+
           {/* Centered Logo & Title */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
             {settings.storeLogoUrl ? (
@@ -1154,6 +1157,30 @@ const handleSendMessage = async () => {
               <h1 style={{ fontSize: '1.35rem', fontWeight: '900', margin: 0, background: 'linear-gradient(135deg, #ff3366, #00f2fe)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.5px' }}>{settings.storeName}</h1>
               <span style={{ fontSize: '0.72rem', color: isDark ? '#94a3b8' : '#64748b' }}>{settings.storeTagline}</span>
             </div>
+          </div>
+          
+          {/* Right column: Theme Toggle pinned to the absolute top right */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button 
+              onClick={() => setIsDark(!isDark)} 
+              style={{ 
+                background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', 
+                color: isDark ? '#fff' : '#000', 
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, 
+                padding: '6px', 
+                borderRadius: '50%', 
+                fontSize: '0.9rem', 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                width: '38px',
+                height: '38px'
+              }}
+              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDark ? '☀️' : '🌙'}
+            </button>
           </div>
 
           {/* Search & Actions Bar */}
@@ -1191,28 +1218,6 @@ const handleSendMessage = async () => {
                 Track Order
               </Link>
             </div>
-
-            <button 
-                onClick={() => setIsDark(!isDark)} 
-                style={{ 
-                  background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', 
-                  color: isDark ? '#fff' : '#000', 
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, 
-                  padding: '6px 10px', 
-                  borderRadius: '50%', 
-                  fontSize: '0.85rem', 
-                  cursor: 'pointer', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  width: '34px',
-                  height: '34px',
-                  marginLeft: '6px'
-                }}
-                title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              >
-                {isDark ? '☀️' : '🌙'}
-              </button>
           </div>
 
         </div>
