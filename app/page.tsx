@@ -1141,8 +1141,8 @@ const handleSendMessage = async () => {
         background: isDark ? 'rgba(9, 13, 22, 0.88)' : 'rgba(248, 250, 252, 0.88)',
         backdropFilter: 'blur(20px)', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, padding: '12px 20px',
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', position: 'relative' }}>
+          
           {/* Centered Logo & Title */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
             {settings.storeLogoUrl ? (
@@ -1155,30 +1155,31 @@ const handleSendMessage = async () => {
               <span style={{ fontSize: '0.72rem', color: isDark ? '#94a3b8' : '#64748b' }}>{settings.storeTagline}</span>
             </div>
           </div>
-          
-          {/* Right column: Theme Toggle pinned to the absolute top right */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button 
-              onClick={() => setIsDark(!isDark)} 
-              style={{ 
-                background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', 
-                color: isDark ? '#fff' : '#000', 
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, 
-                padding: '6px', 
-                borderRadius: '50%', 
-                fontSize: '0.9rem', 
-                cursor: 'pointer', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                width: '38px',
-                height: '38px'
-              }}
-              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              {isDark ? '☀️' : '🌙'}
-            </button>
-          </div>
+
+          {/* Theme Toggle pinned absolutely to the right without shifting the title */}
+          <button 
+            onClick={() => setIsDark(!isDark)} 
+            style={{ 
+              position: 'absolute',
+              top: '4px',
+              right: 0,
+              background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', 
+              color: isDark ? '#fff' : '#000', 
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, 
+              padding: '6px', 
+              borderRadius: '50%', 
+              fontSize: '0.9rem', 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              width: '38px',
+              height: '38px'
+            }}
+            title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {isDark ? '☀️' : '🌙'}
+          </button>
 
           {/* Search & Actions Bar */}
           <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
@@ -1191,21 +1192,9 @@ const handleSendMessage = async () => {
                 <button onClick={() => setIsUploadOpen(true)} style={{ background: 'linear-gradient(135deg, #00f2fe, #00ff9d)', color: '#000', border: 'none', padding: '8px 14px', borderRadius: '30px', fontWeight: '900', fontSize: '0.78rem', cursor: 'pointer' }}>➕ Upload Item</button>
               )}
 
-{/* ADD THE CLOCK HERE */}
-  <div style={{ 
-    fontSize: '0.7rem', 
-    fontWeight: '700', 
-    color: '#00f2fe', 
-    background: 'rgba(0,242,254,0.1)', 
-    padding: '4px 10px', 
-    borderRadius: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    whiteSpace: 'nowrap'
-  }}>
-    <span>🕒</span> {currentTime}
-  </div>
+              <div style={{ fontSize: '0.7rem', fontWeight: '700', color: '#00f2fe', background: 'rgba(0,242,254,0.1)', padding: '4px 10px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                <span>🕒</span> {currentTime}
+              </div>
 
               <button onClick={() => setIsCartOpen(true)} style={{ background: 'linear-gradient(135deg, #ff3366, #ff3366dd)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '30px', fontWeight: '900', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>🛒 Cart</span>
