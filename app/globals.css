@@ -1,23 +1,23 @@
-/* Modern 2026 E-Commerce Glassmorphism Design System */
+/* --- Modern 2026 E-Commerce Glassmorphism Design System --- */
 :root {
   --bg-primary: #090d16;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
   --surface-card: rgba(255, 255, 255, 0.04);
   --surface-card-hover: rgba(255, 255, 255, 0.08);
   --surface-border: rgba(255, 255, 255, 0.1);
   --accent-color: #ff3366;
   --accent-secondary: #00f2fe;
   --accent-green: #25d366;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
 }
 
 [data-theme="light"] {
   --bg-primary: #f8fafc;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
   --surface-card: #ffffff;
   --surface-card-hover: #f1f5f9;
   --surface-border: rgba(0, 0, 0, 0.1);
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
 }
 
 html, body {
@@ -28,6 +28,7 @@ html, body {
   padding: 0;
   overflow-x: hidden;
   box-sizing: border-box;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .glass-card {

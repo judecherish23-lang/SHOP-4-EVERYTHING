@@ -225,7 +225,19 @@ const [tickerText, setTickerText] = useState('🔥 New Arrivals Weekly! • Free
 const [isEditingTicker, setIsEditingTicker] = useState(false);
 const [tickerEditText, setTickerEditText] = useState('');
 
-  const isDark = true;
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('shop4everything_theme');
+      if (savedTheme) return savedTheme === 'dark';
+    }
+    return true; // Default to dark mode
+  });
+
+  useEffect(() => {
+    const themeName = isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', themeName);
+    localStorage.setItem('shop4everything_theme', themeName);
+  }, [isDark]);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallCard, setShowInstallCard] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
