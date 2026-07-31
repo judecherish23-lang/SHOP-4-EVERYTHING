@@ -1339,9 +1339,26 @@ const handleSendMessage = async () => {
         onClick={async () => {
           setTickerText(tickerEditText);
           setIsEditingTicker(false);
+          
           const updatedSettings = { ...settings, ticker_text: tickerEditText };
           setSettings(updatedSettings);
-          await supabase.from('store_settings').upsert([updatedSettings]);
+
+          // If a settings row exists, update it by ID. Otherwise, insert a new one.
+          if (settings.id) {
+            const { error } = await supabase
+              .from('store_settings')
+              .update({ ticker_text: tickerEditText })
+              .eq('id', settings.id);
+            if (error) alert('Error saving ticker: ' + error.message);
+          } else {
+            const { data, error } = await supabase
+              .from('store_settings')
+              .insert([updatedSettings])
+              .select()
+              .single();
+            if (data) setSettings(data as StoreSettings);
+            if (error) alert('Error saving ticker: ' + error.message);
+          }
         }}
         style={{ width: '100%', marginTop: '12px', padding: '10px', borderRadius: '8px', background: '#ff3366', color: '#fff', fontWeight: '900', border: 'none', cursor: 'pointer' }}
       >
