@@ -1191,6 +1191,28 @@ const handleSendMessage = async () => {
                 Track Order
               </Link>
             </div>
+
+            <button 
+                onClick={() => setIsDark(!isDark)} 
+                style={{ 
+                  background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', 
+                  color: isDark ? '#fff' : '#000', 
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}`, 
+                  padding: '6px 10px', 
+                  borderRadius: '50%', 
+                  fontSize: '0.85rem', 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  width: '34px',
+                  height: '34px',
+                  marginLeft: '6px'
+                }}
+                title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                {isDark ? '☀️' : '🌙'}
+              </button>
           </div>
 
         </div>
