@@ -1135,16 +1135,13 @@ const handleSendMessage = async () => {
       }
     `}</style>
 
-      {/* ===== HEADER NAVIGATION ===== */}
+      {/* ===== HEADER NAVIGATION (CENTERED) ===== */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 50,
         background: isDark ? 'rgba(9, 13, 22, 0.88)' : 'rgba(248, 250, 252, 0.88)',
         backdropFilter: 'blur(20px)', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, padding: '12px 20px',
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '10px' }}>
-          
-          {/* Empty spacer on the left to balance the grid */}
-          <div></div>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
 
           {/* Centered Logo & Title */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
